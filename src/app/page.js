@@ -41,7 +41,7 @@ export default function Component() {
 
   const fetchChats = async () => {
     try {
-      const response = await fetch('/api/chats');
+      const response = await fetch('https://welcome.spottywifi.app/concierge/chatbot/chats.php');
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
@@ -49,7 +49,7 @@ export default function Component() {
         );
       }
       const data = await response.json();
-      console.log("Dati ricevuti dall'API /api/chats:", data);
+      console.log("Dati ricevuti dall'API chats.php:", data);
       setChats(data);
     } catch (error) {
       console.error('Errore nel recupero delle chat:', error);
@@ -60,7 +60,7 @@ export default function Component() {
   const fetchMessages = async (mobile) => {
     try {
       const response = await fetch(
-        `/api/messages?mobile=${encodeURIComponent(mobile)}`
+        `https://welcome.spottywifi.app/concierge/chatbot/messages.php?mobile=${encodeURIComponent(mobile)}`
       );
       if (!response.ok) {
         const errorData = await response.json();
