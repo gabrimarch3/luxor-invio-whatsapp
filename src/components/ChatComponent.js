@@ -1,6 +1,6 @@
 'use client'; // Specifica che questo è un Client Component
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation'; // Importa useSearchParams
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   Check,
   CheckCheck,
+  ChevronDown, // Importa ChevronDown
 } from 'lucide-react'; // Icone per gli indicatori di stato
 import { format, isToday, isYesterday } from 'date-fns'; // Per la formattazione delle date
 import ReactMarkdown from 'react-markdown';
@@ -28,6 +29,10 @@ export default function ChatComponent() {
   const [messages, setMessages] = useState([]);
   const [contactSearch, setContactSearch] = useState('');
   const [messageSearch, setMessageSearch] = useState('');
+  
+  // Nuovi stati e riferimenti
+  const messagesEndRef = useRef(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   useEffect(() => {
     if (codiceSpotty) {
@@ -49,6 +54,29 @@ export default function ChatComponent() {
       );
     }
   }, [selectedChat, codiceSpotty]);
+
+  // Funzione per scorrere all'ultimo messaggio
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+    }
+  };
+
+  // Funzione per gestire l'evento di scroll
+  const handleScroll = () => {
+    if (messagesEndRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesEndRef.current;
+      if (scrollHeight - scrollTop - clientHeight < 100) {
+        setShowScrollToBottom(false);
+      } else {
+        setShowScrollToBottom(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const fetchChats = async () => {
     try {
@@ -260,7 +288,7 @@ export default function ChatComponent() {
               ${selectedChat ? '' : 'hidden md:flex md:w-2/3'}`}
       >
         {selectedChat ? (
-          <>
+          <div className="relative flex flex-col flex-grow">
             <div className="bg-[#f0f2f5] p-2 flex items-center">
               {/* Bottone Indietro per mobile */}
               <Button
@@ -302,94 +330,112 @@ export default function ChatComponent() {
               </Button>
             </div>
             <div className="h-px bg-[#e9edef]" />
-            <ScrollArea className="flex-grow p-4 overflow-y-auto">
-              {groupedMessages.map((group, index) => (
-                <div key={index}>
-                  {/* Separatore di Data */}
-                  <div className="flex justify-center mb-4">
-                    <div className="bg-[#d1d7db] text-[#111b21] text-sm py-1 px-3 rounded-full">
-                      {group.dateLabel}
+            
+            <div className="relative flex-grow">
+              <ScrollArea
+                ref={messagesEndRef}
+                className="flex-grow p-4 overflow-y-auto"
+                onScroll={handleScroll}
+              >
+                {groupedMessages.map((group, index) => (
+                  <div key={index}>
+                    {/* Separatore di Data */}
+                    <div className="flex justify-center mb-4">
+                      <div className="bg-[#d1d7db] text-[#111b21] text-sm py-1 px-3 rounded-full">
+                        {group.dateLabel}
+                      </div>
                     </div>
-                  </div>
-                  {/* Messaggi */}
-                  {group.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`mb-2 ${
-                        message.sender === 'Me' ? 'flex justify-end' : 'flex justify-start'
-                      }`}
-                    >
-                      {!isSystemMessage(message) ? (
-                        <div
-                          className={`max-w-xs sm:max-w-md md:max-w-lg p-2 rounded-lg ${
-                            message.sender === 'Me'
-                              ? 'bg-[#dcf8c6] text-right'
-                              : 'bg-white text-left'
-                          }`}
-                        >
-                          {/* Rendering dei Contenuti Multimediali */}
-                          {message.media_url && message.mime_type.startsWith('image/') && (
-                            <img
-                              src={message.media_url}
-                              alt="Immagine"
-                              className="mb-2 max-w-full h-auto rounded"
-                            />
-                          )}
-                          {message.media_url && message.mime_type.startsWith('video/') && (
-                            <video
-                              src={message.media_url}
-                              controls
-                              className="mb-2 max-w-full h-auto rounded"
-                            />
-                          )}
-                          {message.media_url && message.mime_type === 'application/pdf' && (
-                            <a
-                              href={message.media_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mb-2 text-blue-500 underline"
-                            >
-                              Visualizza PDF
-                            </a>
-                          )}
-                          {/* Rendering del Testo Formattato */}
-                          <ReactMarkdown
-                            children={replacePlaceholders(unescapeMessageContent(message.content), Object.values(userData))}
-                            remarkPlugins={[remarkGfm]}
-                            className="prose prose-sm sm:prose-base break-words"
-                          />
-                          {/* Indicatore di Stato */}
-                          <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
-                            {message.sender === 'Me' && message.status !== null && (
-                              <span className="mr-1">
-                                {message.status >= 3 ? (
-                                  <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
-                                ) : message.status === 4 ? (
-                                  <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
-                                ) : (
-                                  <Check className="w-4 h-4 text-[#667781]" />
-                                )}
-                              </span>
+                    {/* Messaggi */}
+                    {group.messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`mb-2 ${
+                          message.sender === 'Me' ? 'flex justify-end' : 'flex justify-start'
+                        }`}
+                      >
+                        {!isSystemMessage(message) ? (
+                          <div
+                            className={`max-w-xs sm:max-w-md md:max-w-lg p-2 rounded-lg ${
+                              message.sender === 'Me'
+                                ? 'bg-[#dcf8c6] text-right'
+                                : 'bg-white text-left'
+                            }`}
+                          >
+                            {/* Rendering dei Contenuti Multimediali */}
+                            {message.media_url && message.mime_type.startsWith('image/') && (
+                              <img
+                                src={message.media_url}
+                                alt="Immagine"
+                                className="mb-2 max-w-full h-auto rounded"
+                              />
                             )}
-                            {format(new Date(message.time), 'HH:mm')}
+                            {message.media_url && message.mime_type.startsWith('video/') && (
+                              <video
+                                src={message.media_url}
+                                controls
+                                className="mb-2 max-w-full h-auto rounded"
+                              />
+                            )}
+                            {message.media_url && message.mime_type === 'application/pdf' && (
+                              <a
+                                href={message.media_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mb-2 text-blue-500 underline"
+                              >
+                                Visualizza PDF
+                              </a>
+                            )}
+                            {/* Rendering del Testo Formattato */}
+                            <ReactMarkdown
+                              children={replacePlaceholders(unescapeMessageContent(message.content), Object.values(userData))}
+                              remarkPlugins={[remarkGfm]}
+                              className="prose prose-sm sm:prose-base break-words"
+                            />
+                            {/* Indicatore di Stato */}
+                            <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
+                              {message.sender === 'Me' && message.status !== null && (
+                                <span className="mr-1">
+                                  {message.status >= 3 ? (
+                                    <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
+                                  ) : message.status === 4 ? (
+                                    <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
+                                  ) : (
+                                    <Check className="w-4 h-4 text-[#667781]" />
+                                  )}
+                                </span>
+                              )}
+                              {format(new Date(message.time), 'HH:mm')}
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        // Messaggio di sistema
-                        <div className="bg-gray-300 text-center py-1 px-3 rounded-full text-sm">
-                          <ReactMarkdown
-                            children={replacePlaceholders(unescapeMessageContent(message.content), Object.values(userData))}
-                            remarkPlugins={[remarkGfm]}
-                            className="prose prose-sm sm:prose-base"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </ScrollArea>
-          </>
+                        ) : (
+                          // Messaggio di sistema
+                          <div className="bg-gray-300 text-center py-1 px-3 rounded-full text-sm">
+                            <ReactMarkdown
+                              children={replacePlaceholders(unescapeMessageContent(message.content), Object.values(userData))}
+                              remarkPlugins={[remarkGfm]}
+                              className="prose prose-sm sm:prose-base"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </ScrollArea>
+              
+              {/* Pulsante per tornare all'ultimo messaggio */}
+              {showScrollToBottom && (
+                <button
+                  onClick={scrollToBottom}
+                  className="fixed bottom-20 right-5 bg-[#25d366] text-white rounded-full p-3 shadow-lg hover:bg-[#1ebe5b] transition"
+                  aria-label="Torna all'ultimo messaggio"
+                >
+                  <ChevronDown className="w-6 h-6" />
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full bg-[#f0f2f5]">
             <div className="w-20 h-20 bg-[#25d366] rounded-full flex items-center justify-center mb-4">
