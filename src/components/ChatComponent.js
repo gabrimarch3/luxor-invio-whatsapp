@@ -1,6 +1,6 @@
 'use client'; // Specifica che questo è un Client Component
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'next/navigation'; // Importa useSearchParams
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,12 @@ import {
   ChevronLeft,
   Check,
   CheckCheck,
+  ArrowDown, // Icona per il pulsante
 } from 'lucide-react'; // Icone per gli indicatori di stato
 import { format, isToday, isYesterday } from 'date-fns'; // Per la formattazione delle date
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // Plugin per supportare GitHub Flavored Markdown
+import debounce from 'lodash.debounce'; // Per ottimizzazione dello scroll
 
 export default function ChatComponent() {
   const searchParams = useSearchParams();
@@ -28,6 +30,12 @@ export default function ChatComponent() {
   const [messages, setMessages] = useState([]);
   const [contactSearch, setContactSearch] = useState('');
   const [messageSearch, setMessageSearch] = useState('');
+  const [showScrollButton, setShowScrollButton] = useState(false); // Stato per mostrare/nascondere il pulsante
+
+  // Crea riferimenti separati
+  const chatListRef = useRef(null); // Se necessario per la lista delle chat
+  const messagesRef = useRef(null); // Per la sezione dei messaggi
+  const bottomRef = useRef(null); // Riferimento per scrollare all'ultimo messaggio
 
   useEffect(() => {
     if (codiceSpotty) {
@@ -49,6 +57,32 @@ export default function ChatComponent() {
       );
     }
   }, [selectedChat, codiceSpotty]);
+
+  // Usa useLayoutEffect per assicurarsi che lo scroll avvenga dopo che il DOM è stato aggiornato
+  useLayoutEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    const scrollContainer = messagesRef.current;
+
+    if (!scrollContainer) return;
+
+    const handleScroll = debounce(() => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50; // Tolleranza di 50px
+
+      setShowScrollButton(!isAtBottom);
+    }, 200); // Debounce di 200ms
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+
+    // Cleanup
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+      handleScroll.cancel();
+    };
+  }, [messages]);
 
   const fetchChats = async () => {
     try {
@@ -186,6 +220,21 @@ export default function ChatComponent() {
     4: 'Un altro dato',
   };
 
+  // Funzione per scorrere all'ultimo messaggio
+  const scrollToBottom = () => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTo({
+        top: messagesRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+
+    // In alternativa, puoi utilizzare un elemento di ancoraggio
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   // Se codice_spotty non è presente, mostra un messaggio
   if (!codiceSpotty) {
     return (
@@ -215,7 +264,7 @@ export default function ChatComponent() {
             <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-[#54656f]" />
           </div>
         </div>
-        <ScrollArea className="flex-grow">
+        <ScrollArea ref={chatListRef} className="flex-grow">
           {filteredChats.map((chat) => (
             <div
               key={chat.id}
@@ -302,7 +351,7 @@ export default function ChatComponent() {
               </Button>
             </div>
             <div className="h-px bg-[#e9edef]" />
-            <ScrollArea className="flex-grow p-4 overflow-y-auto">
+            <ScrollArea ref={messagesRef} className="flex-grow p-4">
               {groupedMessages.map((group, index) => (
                 <div key={index}>
                   {/* Separatore di Data */}
@@ -388,7 +437,19 @@ export default function ChatComponent() {
                   ))}
                 </div>
               ))}
+              {/* Elemento di ancoraggio per scrollare all'ultimo messaggio */}
+              <div ref={bottomRef} />
             </ScrollArea>
+            {/* Pulsante per tornare all'ultimo messaggio */}
+            {showScrollButton && (
+              <button
+                onClick={scrollToBottom}
+                className="fixed bottom-20 right-6 bg-[#25d366] text-white p-3 rounded-full shadow-lg hover:bg-[#1da851] transition"
+                aria-label="Torna all'ultimo messaggio"
+              >
+                <ArrowDown className="w-6 h-6" />
+              </button>
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full bg-[#f0f2f5]">
