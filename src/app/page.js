@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation'; // Importa useSearchParams
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,6 +19,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // Plugin per supportare GitHub Flavored Markdown
 
 export default function Component() {
+  const searchParams = useSearchParams();
+  const codicespottyParam = searchParams.get('codicespotty'); // Ottieni 'codicespotty' dall'URL
+
+  // Genera 'codice_spotty' aggiungendo 'spotty' al parametro 'codicespotty'
+  const codiceSpotty = codicespottyParam ? `spotty${codicespottyParam}` : null;
+
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -25,11 +32,15 @@ export default function Component() {
   const [messageSearch, setMessageSearch] = useState('');
 
   useEffect(() => {
-    fetchChats();
-  }, []);
+    if (codiceSpotty) {
+      console.log('codice_spotty:', codiceSpotty); // Log per debugging
+      fetchChats();
+    }
+  }, [codiceSpotty]);
 
   useEffect(() => {
-    if (selectedChat) {
+    if (selectedChat && codiceSpotty) {
+      console.log('Fetching messages for chat:', selectedChat, 'with codice_spotty:', codiceSpotty); // Log per debugging
       fetchMessages(selectedChat);
       setChats((prevChats) =>
         prevChats.map((chat) =>
@@ -37,11 +48,11 @@ export default function Component() {
         )
       );
     }
-  }, [selectedChat]);
+  }, [selectedChat, codiceSpotty]);
 
   const fetchChats = async () => {
     try {
-      const response = await fetch('https://welcome.spottywifi.app/concierge/chatbot/chats.php');
+      const response = await fetch(`https://welcome.spottywifi.app/concierge/chatbot/chats.php?codice_spotty=${encodeURIComponent(codiceSpotty)}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
@@ -60,7 +71,7 @@ export default function Component() {
   const fetchMessages = async (mobile) => {
     try {
       const response = await fetch(
-        `https://welcome.spottywifi.app/concierge/chatbot/messages.php?mobile=${encodeURIComponent(mobile)}`
+        `https://welcome.spottywifi.app/concierge/chatbot/messages.php?codice_spotty=${encodeURIComponent(codiceSpotty)}&mobile=${encodeURIComponent(mobile)}`
       );
       if (!response.ok) {
         const errorData = await response.json();
