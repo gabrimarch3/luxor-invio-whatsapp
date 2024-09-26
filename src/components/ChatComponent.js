@@ -86,7 +86,7 @@ export default function ChatComponent() {
 
   const fetchChats = async () => {
     try {
-      const response = await fetch(`https://welcome.spottywifi.app/concierge/chatbot/chats.php?codice_spotty=${encodeURIComponent(codiceSpotty)}`);
+      const response = await fetch(`https://welcome.spottywifi.app/concierge/chatbot/api/chats.php?codice_spotty=${encodeURIComponent(codiceSpotty)}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
@@ -105,7 +105,7 @@ export default function ChatComponent() {
   const fetchMessages = async (mobile) => {
     try {
       const response = await fetch(
-        `https://welcome.spottywifi.app/concierge/chatbot/messages.php?codice_spotty=${encodeURIComponent(codiceSpotty)}&mobile=${encodeURIComponent(mobile)}`
+        `https://welcome.spottywifi.app/concierge/chatbot/api/messages.php?codice_spotty=${encodeURIComponent(codiceSpotty)}&mobile=${encodeURIComponent(mobile)}`
       );
       if (!response.ok) {
         const errorData = await response.json();
