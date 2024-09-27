@@ -18,6 +18,8 @@ import {
   Search,
   MoreVertical,
   ChevronLeft,
+  Check,
+  CheckCheck,
   ArrowDown,
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -29,7 +31,10 @@ export default function ChatComponent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const codicespottyParam = searchParams.get('codicespotty');
-  const codiceSpotty = codicespottyParam ? `spotty${codicespottyParam}` : null;
+
+  // Stato per selectedClient e codiceSpotty
+  const [selectedClient, setSelectedClient] = useState(codicespottyParam || null);
+  const codiceSpotty = selectedClient ? `spotty${selectedClient}` : null;
 
   const [chats, setChats] = useState([]);
   const [altriClientiGruppo, setAltriClientiGruppo] = useState([]);
@@ -39,18 +44,19 @@ export default function ChatComponent() {
   const [messageSearch, setMessageSearch] = useState('');
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  const [selectedClient, setSelectedClient] = useState(codicespottyParam || null);
-
   const chatListRef = useRef(null);
   const messagesRef = useRef(null);
   const bottomRef = useRef(null);
+
+  // Ref per memorizzare altriClientiGruppo iniziale
+  const initialAltriClientiGruppo = useRef(null);
 
   useEffect(() => {
     if (codiceSpotty) {
       console.log('codice_spotty:', codiceSpotty);
       fetchChats();
     } else {
-      console.log("codice_spotty non trovato nell'URL");
+      console.log("codice_spotty non trovato");
     }
   }, [codiceSpotty]);
 
@@ -70,10 +76,6 @@ export default function ChatComponent() {
       );
     }
   }, [selectedChat, codiceSpotty]);
-
-  useEffect(() => {
-    setSelectedClient(codicespottyParam || null);
-  }, [codicespottyParam]);
 
   useLayoutEffect(() => {
     scrollToBottom();
@@ -115,7 +117,12 @@ export default function ChatComponent() {
       const data = await response.json();
       console.log("Dati ricevuti dall'API chats.php:", data);
       setChats(data.chats);
-      setAltriClientiGruppo(data.altriClientiGruppo || []);
+
+      // Imposta altriClientiGruppo solo se non è già stato impostato
+      if (initialAltriClientiGruppo.current === null) {
+        setAltriClientiGruppo(data.altriClientiGruppo || []);
+        initialAltriClientiGruppo.current = data.altriClientiGruppo || [];
+      }
     } catch (error) {
       console.error('Errore nel recupero delle chat:', error);
       setChats([]);
@@ -178,6 +185,7 @@ export default function ChatComponent() {
     setSelectedChat(null);
   };
 
+  // Funzione per raggruppare i messaggi per data
   const groupMessagesByDate = (messages) => {
     const groupedMessages = [];
     messages.forEach((message) => {
@@ -208,18 +216,21 @@ export default function ChatComponent() {
 
   const groupedMessages = groupMessagesByDate(filteredMessages);
 
+  // Funzione per gestire le sequenze di escape nei contenuti dei messaggi
   const unescapeMessageContent = (content) => {
     if (!content) return '';
     return content
       .replace(/\\n/g, '\n')
       .replace(/\\t/g, '\t')
-      .replace(/\\\\/g, '\\');
+      .replace(/\\\\/g, '\\'); // Gestisce le backslash
   };
 
+  // Funzione per determinare se un messaggio è di sistema
   const isSystemMessage = (message) => {
     return message.isSystem;
   };
 
+  // Funzione per sostituire i placeholder
   const replacePlaceholders = (content, replacements) => {
     if (!replacements) return content;
     let updatedContent = content;
@@ -263,15 +274,13 @@ export default function ChatComponent() {
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
-      {/* Left chat section */}
+      {/* Sezione sinistra delle chat */}
       <div
         className={`flex flex-col border-r border-[#d1d7db] bg-white 
-              ${
-                selectedChat ? 'hidden md:flex md:w-1/3' : 'w-full md:w-1/3'
-              }`}
+              ${selectedChat ? 'hidden md:flex md:w-1/3' : 'w-full md:w-1/3'}`}
       >
         <div className="bg-[#f0f2f5] p-4">
-          {/* Use the Select component for other group clients */}
+          {/* Componente Select per altri clienti del gruppo */}
           {altriClientiGruppo.length > 0 && (
             <div className="mb-4">
               <Select
@@ -282,7 +291,11 @@ export default function ChatComponent() {
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  {selectedClient ? (
+                    <SelectValue />
+                  ) : (
+                    <span className="text-gray-500">Seleziona una struttura</span>
+                  )}
                 </SelectTrigger>
                 <SelectContent>
                   {altriClientiGruppo.map((cliente) => {
@@ -320,10 +333,7 @@ export default function ChatComponent() {
             >
               <Avatar className="h-12 w-12 mr-3 flex-shrink-0">
                 {chat.avatar ? (
-                  <AvatarImage
-                    src={chat.avatar}
-                    alt={chat.name || 'Sconosciuto'}
-                  />
+                  <AvatarImage src={chat.avatar} alt={chat.name || 'Sconosciuto'} />
                 ) : (
                   <AvatarFallback className="bg-[#dfe5e7] text-[#54656f]">
                     {getInitials(chat.name)}
@@ -351,7 +361,7 @@ export default function ChatComponent() {
         </ScrollArea>
       </div>
 
-      {/* Right messages section */}
+      {/* Sezione destra dei messaggi */}
       <div
         className={`flex flex-col bg-[#efeae2] flex-grow 
               ${selectedChat ? '' : 'hidden md:flex md:w-2/3'}`}
@@ -359,7 +369,7 @@ export default function ChatComponent() {
         {selectedChat ? (
           <>
             <div className="bg-[#f0f2f5] p-2 flex items-center">
-              {/* Back button for mobile */}
+              {/* Pulsante indietro per mobile */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -394,16 +404,126 @@ export default function ChatComponent() {
                 />
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-[#54656f]" />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-[#54656f] ml-2"
-              >
+              <Button variant="ghost" size="icon" className="text-[#54656f] ml-2">
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </div>
             <div className="h-px bg-[#e9edef]" />
-            {/* Rest of your message section code */}
+            {/* Area di visualizzazione dei messaggi */}
+            <ScrollArea ref={messagesRef} className="flex-grow p-4">
+              {groupedMessages.map((group, index) => (
+                <div key={index}>
+                  {/* Separatore di data */}
+                  <div className="flex justify-center mb-4">
+                    <div className="bg-[#d1d7db] text-[#111b21] text-sm py-1 px-3 rounded-full">
+                      {group.dateLabel}
+                    </div>
+                  </div>
+                  {/* Messaggi */}
+                  {group.messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`mb-2 ${
+                        message.sender === 'Me'
+                          ? 'flex justify-end'
+                          : 'flex justify-start'
+                      }`}
+                    >
+                      {!isSystemMessage(message) ? (
+                        <div
+                          className={`max-w-xs sm:max-w-md md:max-w-lg p-2 rounded-lg ${
+                            message.sender === 'Me'
+                              ? 'bg-[#dcf8c6] text-right'
+                              : 'bg-white text-left'
+                          }`}
+                        >
+                          {/* Rendering del contenuto multimediale */}
+                          {message.media_url &&
+                            message.mime_type &&
+                            message.mime_type.startsWith('image/') && (
+                              <img
+                                src={message.media_url}
+                                alt="Immagine"
+                                className="mb-2 max-w-full h-auto rounded"
+                              />
+                            )}
+                          {message.media_url &&
+                            message.mime_type &&
+                            message.mime_type.startsWith('video/') && (
+                              <video
+                                src={message.media_url}
+                                controls
+                                className="mb-2 max-w-full h-auto rounded"
+                              />
+                            )}
+                          {message.media_url &&
+                            message.mime_type === 'application/pdf' && (
+                              <a
+                                href={message.media_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mb-2 text-blue-500 underline"
+                              >
+                                Visualizza PDF
+                              </a>
+                            )}
+                          {/* Rendering del testo formattato */}
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            className="prose text-sm break-words"
+                          >
+                            {replacePlaceholders(
+                              unescapeMessageContent(message.content),
+                              Object.values(userData)
+                            )}
+                          </ReactMarkdown>
+                          {/* Indicatore di stato */}
+                          <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
+                            {message.sender === 'Me' && message.status !== null && (
+                              <span className="mr-1">
+                                {message.status >= 3 ? (
+                                  <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
+                                ) : message.status === 4 ? (
+                                  <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
+                                ) : (
+                                  <Check className="w-4 h-4 text-[#667781]" />
+                                )}
+                              </span>
+                            )}
+                            {format(new Date(message.time), 'HH:mm')}
+                          </div>
+                        </div>
+                      ) : (
+                        // Messaggio di sistema
+                        <div className="bg-gray-300 text-center py-1 px-3 rounded-full text-sm">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            className="prose text-sm break-words"
+                          >
+                            {replacePlaceholders(
+                              unescapeMessageContent(message.content),
+                              Object.values(userData)
+                            )}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {/* Elemento per scrollare all'ultimo messaggio */}
+              <div ref={bottomRef} />
+            </ScrollArea>
+            {/* Pulsante per scrollare in fondo */}
+            {showScrollButton && (
+              <button
+                onClick={scrollToBottom}
+                className="fixed bottom-20 right-6 bg-[#25d366] text-white p-3 rounded-full shadow-lg hover:bg-[#1da851] transition"
+                aria-label="Torna all'ultimo messaggio"
+              >
+                <ArrowDown className="w-6 h-6" />
+              </button>
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full bg-[#f0f2f5]">
@@ -419,7 +539,6 @@ export default function ChatComponent() {
     </div>
   );
 }
-
 
 // Funzione per determinare se un messaggio è di sistema
 const isSystemMessage = (message) => {
