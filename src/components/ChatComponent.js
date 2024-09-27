@@ -262,15 +262,40 @@ export default function ChatComponent() {
   };
 
   if (!codiceSpotty) {
+    const [spottyNumber, setSpottyNumber] = useState('');
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      if (spottyNumber) {
+        window.location.href = `/?codicespotty=${spottyNumber}`;
+      }
+    };
+  
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#f0f2f5]">
-        <p className="text-lg text-[#41525d] text-center px-4">
-          Codice Spotty non fornito. Per favore, fornisci un codice valido
-          nell'URL.
-        </p>
+      <div className="flex flex-col items-center justify-center h-full bg-gradient-to-b from-blue-50 to-white">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-6">Inserisci il Codice Spotty</h1>
+          <form onSubmit={handleSubmit} className="flex items-center">
+            <span className="text-gray-700 text-lg mr-2">spotty</span>
+            <input
+              type="text"
+              className="border border-gray-300 rounded-l px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Inserisci il numero"
+              value={spottyNumber}
+              onChange={(e) => setSpottyNumber(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded-r hover:bg-blue-700 transition duration-200"
+            >
+              Vai
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
+  
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
