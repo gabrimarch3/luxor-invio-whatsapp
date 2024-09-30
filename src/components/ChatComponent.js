@@ -392,7 +392,8 @@ export default function ChatComponent() {
       >
         {selectedChat ? (
           <div className="flex flex-col h-full">
-            <div className="flex-shrink-0">
+            {/* Barra dei contatti */}
+            <div className="flex-shrink-0 sticky top-0 z-10">
               <div className="bg-[#f0f2f5] p-2 flex items-center">
                 {/* Pulsante indietro per mobile */}
                 <Button
@@ -435,8 +436,8 @@ export default function ChatComponent() {
               </div>
               <div className="h-px bg-[#e9edef]" />
             </div>
+            {/* Area dei messaggi scrollabile */}
             <div className="flex-grow overflow-y-auto">
-              {/* Area di visualizzazione dei messaggi */}
               <ScrollArea ref={messagesRef} className="p-4">
                 {groupedMessages.map((group, index) => (
                   <div key={index}>
