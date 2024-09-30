@@ -21,7 +21,17 @@ import {
   Check,
   CheckCheck,
   ArrowDown,
+  Send,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogHeader,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { format, isToday, isYesterday } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -32,7 +42,6 @@ export default function ChatComponent() {
   const router = useRouter();
   const codicespottyParam = searchParams.get('codicespotty');
 
-  // Stato per selectedClient e codiceSpotty
   const [selectedClient, setSelectedClient] = useState(codicespottyParam || null);
   const codiceSpotty = selectedClient ? `spotty${selectedClient}` : null;
 
@@ -43,12 +52,13 @@ export default function ChatComponent() {
   const [contactSearch, setContactSearch] = useState('');
   const [messageSearch, setMessageSearch] = useState('');
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [messageInput, setMessageInput] = useState('');
+  const [isChatDisabled, setIsChatDisabled] = useState(false);
 
   const chatListRef = useRef(null);
   const messagesRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Ref per memorizzare altriClientiGruppo iniziale
   const initialAltriClientiGruppo = useRef(null);
 
   useEffect(() => {
@@ -76,6 +86,24 @@ export default function ChatComponent() {
       );
     }
   }, [selectedChat, codiceSpotty]);
+
+  // Controlla se la chat deve essere disabilitata
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      const lastMessageTime = new Date(lastMessage.time);
+      const now = new Date();
+      const timeDifference = now - lastMessageTime;
+      const hoursDifference = timeDifference / (1000 * 60 * 60);
+      if (hoursDifference > 24) {
+        setIsChatDisabled(true);
+      } else {
+        setIsChatDisabled(false);
+      }
+    } else {
+      setIsChatDisabled(false);
+    }
+  }, [messages]);
 
   useLayoutEffect(() => {
     scrollToBottom();
@@ -118,7 +146,6 @@ export default function ChatComponent() {
       console.log("Dati ricevuti dall'API chats.php:", data);
       setChats(data.chats);
 
-      // Imposta altriClientiGruppo solo se non è già stato impostato
       if (initialAltriClientiGruppo.current === null) {
         setAltriClientiGruppo(data.altriClientiGruppo || []);
         initialAltriClientiGruppo.current = data.altriClientiGruppo || [];
@@ -148,6 +175,44 @@ export default function ChatComponent() {
       console.error('Errore nel recupero dei messaggi:', error);
       setMessages([]);
     }
+  };
+
+  const handleSendMessage = async () => {
+    if (messageInput.trim() === '') return;
+    const newMessage = {
+      id: Date.now(),
+      sender: 'Me',
+      content: messageInput,
+      time: new Date().toISOString(),
+      status: null,
+      isSystem: false,
+    };
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
+
+    try {
+      const response = await fetch(
+        'https://welcome.spottywifi.app/concierge/chatbot/api/send-message.php',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            codice_spotty: codiceSpotty,
+            mobile: selectedChat,
+            message: messageInput,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Errore nell'invio del messaggio");
+      }
+    } catch (error) {
+      console.error("Errore nell'invio del messaggio:", error);
+    }
+
+    setMessageInput('');
+    scrollToBottom();
   };
 
   const filteredChats = Array.isArray(chats)
@@ -185,7 +250,6 @@ export default function ChatComponent() {
     setSelectedChat(null);
   };
 
-  // Funzione per raggruppare i messaggi per data
   const groupMessagesByDate = (messages) => {
     const groupedMessages = [];
     messages.forEach((message) => {
@@ -216,7 +280,6 @@ export default function ChatComponent() {
 
   const groupedMessages = groupMessagesByDate(filteredMessages);
 
-  // Funzione per gestire le sequenze di escape nei contenuti dei messaggi
   const unescapeMessageContent = (content) => {
     if (!content) return '';
     return content
@@ -225,12 +288,10 @@ export default function ChatComponent() {
       .replace(/\\\\/g, '\\'); // Gestisce le backslash
   };
 
-  // Funzione per determinare se un messaggio è di sistema
   const isSystemMessage = (message) => {
     return message.isSystem;
   };
 
-  // Funzione per sostituire i placeholder
   const replacePlaceholders = (content, replacements) => {
     if (!replacements) return content;
     let updatedContent = content;
@@ -274,7 +335,9 @@ export default function ChatComponent() {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-gradient-to-b from-blue-50 to-white">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6">Inserisci il Codice Spotty</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-6">
+            Inserisci il Codice Spotty
+          </h1>
           <form onSubmit={handleSubmit} className="flex items-center">
             <span className="text-gray-700 text-lg mr-2">spotty</span>
             <input
@@ -543,6 +606,75 @@ export default function ChatComponent() {
                 <div ref={bottomRef} />
               </ScrollArea>
             </div>
+            {/* Barra di input */}
+            <div className="flex items-center p-3 bg-[#f0f2f5]">
+              {/* Pulsante Template */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" className="text-[#54656f]">
+                    Template
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Seleziona un template</DialogTitle>
+                    <DialogDescription>Contenuto del modale</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button onClick={() => {}}>Chiudi</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Campo di testo o area disabilitata */}
+              <div className="flex-grow mx-2">
+                {isChatDisabled ? (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <div className="w-full bg-gray-200 text-gray-500 px-4 py-2 rounded cursor-pointer">
+                        La chat è disabilitata. Clicca qui per selezionare un template.
+                      </div>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        
+                    <DialogTitle>Seleziona un template</DialogTitle>
+                    <DialogDescription>Una volta terminate le 24 ore dall'ultimo messaggio occorre selezionare uno dei tuoi template da qui sotto</DialogDescription>
+                      </DialogHeader>
+                      
+                    </DialogContent>
+                  </Dialog>
+                ) : (
+                  <Input
+                    className="w-full"
+                    placeholder="Scrivi un messaggio"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSendMessage();
+                      }
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Pulsante di invio */}
+              {isChatDisabled ? (
+                <Button variant="ghost" className="text-[#54656f]" disabled>
+                  <Send className="w-6 h-6" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="text-[#54656f]"
+                  onClick={handleSendMessage}
+                >
+                  <Send className="w-6 h-6" />
+                </Button>
+              )}
+            </div>
+
             {/* Pulsante per scrollare in fondo */}
             {showScrollButton && (
               <button
@@ -593,3 +725,5 @@ const replacePlaceholders = (content, replacements) => {
   });
   return updatedContent;
 };
+
+
