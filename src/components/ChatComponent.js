@@ -263,14 +263,14 @@ export default function ChatComponent() {
 
   if (!codiceSpotty) {
     const [spottyNumber, setSpottyNumber] = useState('');
-  
+
     const handleSubmit = (e) => {
       e.preventDefault();
       if (spottyNumber) {
         window.location.href = `/?codicespotty=${spottyNumber}`;
       }
     };
-  
+
     return (
       <div className="flex flex-col items-center justify-center h-full bg-gradient-to-b from-blue-50 to-white">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md text-center">
@@ -295,7 +295,6 @@ export default function ChatComponent() {
       </div>
     );
   }
-  
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -388,157 +387,161 @@ export default function ChatComponent() {
 
       {/* Sezione destra dei messaggi */}
       <div
-        className={`flex flex-col bg-[#efeae2] flex-grow 
+        className={`flex flex-col bg-[#efeae2] flex-grow h-full
               ${selectedChat ? '' : 'hidden md:flex md:w-2/3'}`}
       >
         {selectedChat ? (
-          <>
-            <div className="bg-[#f0f2f5] p-2 flex items-center">
-              {/* Pulsante indietro per mobile */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-[#54656f] mr-2 md:hidden"
-                onClick={handleBack}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <Avatar className="h-10 w-10 mr-3">
-                {selectedChatData?.avatar ? (
-                  <AvatarImage
-                    src={selectedChatData.avatar}
-                    alt={selectedChatData.name || 'Sconosciuto'}
-                  />
-                ) : (
-                  <AvatarFallback className="bg-[#dfe5e7] text-[#54656f]">
-                    {getInitials(selectedChatData?.name || 'S')}
-                  </AvatarFallback>
-                )}
-              </Avatar>
-              <div className="flex-grow">
-                <div className="font-semibold text-[#111b21]">
-                  {selectedChatData?.name || 'Sconosciuto'}
-                </div>
-              </div>
-              <div className="relative hidden md:block">
-                <Input
-                  placeholder="Cerca nella chat"
-                  className="pl-10 bg-white w-64"
-                  value={messageSearch}
-                  onChange={(e) => setMessageSearch(e.target.value)}
-                />
-                <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-[#54656f]" />
-              </div>
-              <Button variant="ghost" size="icon" className="text-[#54656f] ml-2">
-                <MoreVertical className="h-5 w-5" />
-              </Button>
-            </div>
-            <div className="h-px bg-[#e9edef]" />
-            {/* Area di visualizzazione dei messaggi */}
-            <ScrollArea ref={messagesRef} className="flex-grow p-4">
-              {groupedMessages.map((group, index) => (
-                <div key={index}>
-                  {/* Separatore di data */}
-                  <div className="flex justify-center mb-4">
-                    <div className="bg-[#d1d7db] text-[#111b21] text-sm py-1 px-3 rounded-full">
-                      {group.dateLabel}
-                    </div>
+          <div className="flex flex-col h-full">
+            <div className="flex-shrink-0">
+              <div className="bg-[#f0f2f5] p-2 flex items-center">
+                {/* Pulsante indietro per mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-[#54656f] mr-2 md:hidden"
+                  onClick={handleBack}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <Avatar className="h-10 w-10 mr-3">
+                  {selectedChatData?.avatar ? (
+                    <AvatarImage
+                      src={selectedChatData.avatar}
+                      alt={selectedChatData.name || 'Sconosciuto'}
+                    />
+                  ) : (
+                    <AvatarFallback className="bg-[#dfe5e7] text-[#54656f]">
+                      {getInitials(selectedChatData?.name || 'S')}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="flex-grow">
+                  <div className="font-semibold text-[#111b21]">
+                    {selectedChatData?.name || 'Sconosciuto'}
                   </div>
-                  {/* Messaggi */}
-                  {group.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`mb-2 ${
-                        message.sender === 'Me'
-                          ? 'flex justify-end'
-                          : 'flex justify-start'
-                      }`}
-                    >
-                      {!isSystemMessage(message) ? (
-                        <div
-                          className={`max-w-xs sm:max-w-md md:max-w-lg p-2 rounded-lg ${
-                            message.sender === 'Me'
-                              ? 'bg-[#dcf8c6] text-right'
-                              : 'bg-white text-left'
-                          }`}
-                        >
-                          {/* Rendering del contenuto multimediale */}
-                          {message.media_url &&
-                            message.mime_type &&
-                            message.mime_type.startsWith('image/') && (
-                              <img
-                                src={message.media_url}
-                                alt="Immagine"
-                                className="mb-2 max-w-full h-auto rounded"
-                              />
-                            )}
-                          {message.media_url &&
-                            message.mime_type &&
-                            message.mime_type.startsWith('video/') && (
-                              <video
-                                src={message.media_url}
-                                controls
-                                className="mb-2 max-w-full h-auto rounded"
-                              />
-                            )}
-                          {message.media_url &&
-                            message.mime_type === 'application/pdf' && (
-                              <a
-                                href={message.media_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mb-2 text-blue-500 underline"
-                              >
-                                Visualizza PDF
-                              </a>
-                            )}
-                          {/* Rendering del testo formattato */}
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            className="prose text-sm break-words"
-                          >
-                            {replacePlaceholders(
-                              unescapeMessageContent(message.content),
-                              Object.values(userData)
-                            )}
-                          </ReactMarkdown>
-                          {/* Indicatore di stato */}
-                          <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
-                            {message.sender === 'Me' && message.status !== null && (
-                              <span className="mr-1">
-                                {message.status >= 3 ? (
-                                  <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
-                                ) : message.status === 4 ? (
-                                  <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
-                                ) : (
-                                  <Check className="w-4 h-4 text-[#667781]" />
-                                )}
-                              </span>
-                            )}
-                            {format(new Date(message.time), 'HH:mm')}
-                          </div>
-                        </div>
-                      ) : (
-                        // Messaggio di sistema
-                        <div className="bg-gray-300 text-center py-1 px-3 rounded-full text-sm">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            className="prose text-sm break-words"
-                          >
-                            {replacePlaceholders(
-                              unescapeMessageContent(message.content),
-                              Object.values(userData)
-                            )}
-                          </ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                  ))}
                 </div>
-              ))}
-              {/* Elemento per scrollare all'ultimo messaggio */}
-              <div ref={bottomRef} />
-            </ScrollArea>
+                <div className="relative hidden md:block">
+                  <Input
+                    placeholder="Cerca nella chat"
+                    className="pl-10 bg-white w-64"
+                    value={messageSearch}
+                    onChange={(e) => setMessageSearch(e.target.value)}
+                  />
+                  <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-[#54656f]" />
+                </div>
+                <Button variant="ghost" size="icon" className="text-[#54656f] ml-2">
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </div>
+              <div className="h-px bg-[#e9edef]" />
+            </div>
+            <div className="flex-grow overflow-y-auto">
+              {/* Area di visualizzazione dei messaggi */}
+              <ScrollArea ref={messagesRef} className="p-4">
+                {groupedMessages.map((group, index) => (
+                  <div key={index}>
+                    {/* Separatore di data */}
+                    <div className="flex justify-center mb-4">
+                      <div className="bg-[#d1d7db] text-[#111b21] text-sm py-1 px-3 rounded-full">
+                        {group.dateLabel}
+                      </div>
+                    </div>
+                    {/* Messaggi */}
+                    {group.messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`mb-2 ${
+                          message.sender === 'Me'
+                            ? 'flex justify-end'
+                            : 'flex justify-start'
+                        }`}
+                      >
+                        {!isSystemMessage(message) ? (
+                          <div
+                            className={`max-w-xs sm:max-w-md md:max-w-lg p-2 rounded-lg ${
+                              message.sender === 'Me'
+                                ? 'bg-[#dcf8c6] text-right'
+                                : 'bg-white text-left'
+                            }`}
+                          >
+                            {/* Rendering del contenuto multimediale */}
+                            {message.media_url &&
+                              message.mime_type &&
+                              message.mime_type.startsWith('image/') && (
+                                <img
+                                  src={message.media_url}
+                                  alt="Immagine"
+                                  className="mb-2 max-w-full h-auto rounded"
+                                />
+                              )}
+                            {message.media_url &&
+                              message.mime_type &&
+                              message.mime_type.startsWith('video/') && (
+                                <video
+                                  src={message.media_url}
+                                  controls
+                                  className="mb-2 max-w-full h-auto rounded"
+                                />
+                              )}
+                            {message.media_url &&
+                              message.mime_type === 'application/pdf' && (
+                                <a
+                                  href={message.media_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mb-2 text-blue-500 underline"
+                                >
+                                  Visualizza PDF
+                                </a>
+                              )}
+                            {/* Rendering del testo formattato */}
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              className="prose text-sm break-words"
+                            >
+                              {replacePlaceholders(
+                                unescapeMessageContent(message.content),
+                                Object.values(userData)
+                              )}
+                            </ReactMarkdown>
+                            {/* Indicatore di stato */}
+                            <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
+                              {message.sender === 'Me' && message.status !== null && (
+                                <span className="mr-1">
+                                  {message.status >= 3 ? (
+                                    <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
+                                  ) : message.status === 4 ? (
+                                    <CheckCheck className="w-4 h-4 text-[#53bdeb]" />
+                                  ) : (
+                                    <Check className="w-4 h-4 text-[#667781]" />
+                                  )}
+                                </span>
+                              )}
+                              {format(new Date(message.time), 'HH:mm')}
+                            </div>
+                          </div>
+                        ) : (
+                          // Messaggio di sistema
+                          <div className="bg-gray-300 text-center py-1 px-3 rounded-full text-sm">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              className="prose text-sm break-words"
+                            >
+                              {replacePlaceholders(
+                                unescapeMessageContent(message.content),
+                                Object.values(userData)
+                              )}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {/* Elemento per scrollare all'ultimo messaggio */}
+                <div ref={bottomRef} />
+              </ScrollArea>
+            </div>
             {/* Pulsante per scrollare in fondo */}
             {showScrollButton && (
               <button
@@ -549,7 +552,7 @@ export default function ChatComponent() {
                 <ArrowDown className="w-6 h-6" />
               </button>
             )}
-          </>
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full bg-[#f0f2f5]">
             <div className="w-20 h-20 bg-[#25d366] rounded-full flex items-center justify-center mb-4">
