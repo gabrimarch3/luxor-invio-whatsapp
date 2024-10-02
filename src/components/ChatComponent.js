@@ -96,6 +96,110 @@ export default function ChatComponent() {
     }
   }, [selectedChat, codiceSpotty]);
 
+  const pollNewMessages = async () => {
+    try {
+      if (!codiceSpotty) return;
+  
+      // Ottieni l'elenco aggiornato delle chat
+      const response = await fetch(
+        `https://welcome.spottywifi.app/concierge/chatbot/api/chats.php?codice_spotty=${encodeURIComponent(
+          codiceSpotty
+        )}`
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          `Errore HTTP! status: ${response.status} - ${errorData.message}`
+        );
+      }
+      const data = await response.json();
+  
+      // Aggiorna le chat con i nuovi messaggi non letti
+      const updatedChats = await Promise.all(
+        data.chats.map(async (chat) => {
+          const existingChat = chats.find((c) => c.id === chat.id);
+          const lastKnownMessageId = existingChat ? existingChat.lastMessageId || 0 : 0;
+          let unreadCount = existingChat ? existingChat.unreadCount || 0 : 0;
+  
+          try {
+            const messagesResponse = await fetch(
+              `https://welcome.spottywifi.app/concierge/chatbot/api/messages.php?codice_spotty=${encodeURIComponent(
+                codiceSpotty
+              )}&mobile=${encodeURIComponent(chat.id)}&limit=1`
+            );
+            if (!messagesResponse.ok) {
+              throw new Error("Errore nel recupero dell'ultimo messaggio");
+            }
+            const messagesData = await messagesResponse.json();
+            const lastMessage = messagesData[messagesData.length - 1];
+  
+            let lastMessageIdFromServer = lastMessage ? lastMessage.id : 0;
+  
+            if (chat.id !== selectedChat) {
+              if (lastMessageIdFromServer > lastKnownMessageId) {
+                // Ci sono nuovi messaggi
+                unreadCount = lastMessageIdFromServer - lastKnownMessageId;
+              } else {
+                // Nessun nuovo messaggio
+                unreadCount = 0;
+              }
+            } else {
+              // Se la chat è selezionata, unreadCount è zero
+              unreadCount = 0;
+            }
+  
+            // Aggiorna le informazioni della chat
+            return {
+              ...chat,
+              lastMessage: existingChat ? existingChat.lastMessage : '',
+              lastMessageSender: existingChat ? existingChat.lastMessageSender : '',
+              lastMessageType: existingChat ? existingChat.lastMessageType : '',
+              time: existingChat ? existingChat.time : '',
+              lastMessageId: lastMessageIdFromServer,
+              unreadCount,
+            };
+          } catch (error) {
+            console.error("Errore nel controllo dei nuovi messaggi:", error);
+            // Se c'è un errore, ritorna i dati esistenti della chat
+            return existingChat || chat;
+          }
+        })
+      );
+  
+      // Ordina le chat (opzionale)
+      const sortedChats = updatedChats.sort((a, b) => {
+        if (b.unreadCount !== a.unreadCount) {
+          return b.unreadCount - a.unreadCount; // Chat con più non letti prima
+        }
+        const timeA = new Date(a.time).getTime();
+        const timeB = new Date(b.time).getTime();
+        return timeB - timeA; // Ordina dalla più recente alla meno recente
+      });
+  
+      setChats(sortedChats);
+    } catch (error) {
+      console.error("Errore nel polling dei nuovi messaggi:", error);
+    }
+  };
+  
+
+  useEffect(() => {
+    let pollingInterval;
+
+    if (codiceSpotty) {
+      // Inizia il polling ogni 5 secondi
+      pollingInterval = setInterval(() => {
+        pollNewMessages();
+      }, 5000);
+    }
+
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [codiceSpotty, selectedChat, chats]);
+
   // Check if the chat should be disabled
   useEffect(() => {
     if (messages.length > 0) {
@@ -114,7 +218,14 @@ export default function ChatComponent() {
   }, [messages]);
 
   useLayoutEffect(() => {
-    scrollToBottom();
+    if (messagesRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesRef.current;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50;
+
+      if (isAtBottom) {
+        scrollToBottom();
+      }
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -169,10 +280,13 @@ export default function ChatComponent() {
             let lastMessageType = "";
             let lastMessageSender = "";
             let lastMessageTime = "";
+            let lastMessageId = 0;
+
             if (messagesData.length > 0) {
               const lastMessage = messagesData[messagesData.length - 1];
               lastMessageSender = lastMessage.sender;
               lastMessageTime = lastMessage.time;
+              lastMessageId = lastMessage.id;
               if (lastMessage.media_url) {
                 if (lastMessage.mime_type.startsWith("image/")) {
                   lastMessageContent = "📷 immagine";
@@ -192,12 +306,22 @@ export default function ChatComponent() {
                 lastMessageType = "text";
               }
             }
+
+            // Determina unreadCount
+            let unreadCount = 0;
+            const existingChat = chats.find((c) => c.id === chat.id);
+            if (existingChat) {
+              unreadCount = existingChat.unreadCount || 0;
+            }
+
             return {
               ...chat,
               lastMessage: lastMessageContent,
               lastMessageSender,
               lastMessageType,
               time: lastMessageTime || "",
+              lastMessageId,
+              unreadCount,
             };
           } catch (error) {
             return {
@@ -206,22 +330,21 @@ export default function ChatComponent() {
               lastMessageSender: "",
               lastMessageType: "",
               time: "",
+              lastMessageId: 0,
+              unreadCount: 0,
             };
           }
         })
       );
-      setChats(chatsWithLastMessage);
 
-      if (initialAltriClientiGruppo.current === null) {
-        setAltriClientiGruppo(data.altriClientiGruppo || []);
-        initialAltriClientiGruppo.current = data.altriClientiGruppo || [];
-      }
+      setChats(chatsWithLastMessage);
     } catch (error) {
+      console.error("Errore nel recupero delle chat:", error);
       setChats([]);
     }
   };
 
-  const fetchMessages = async (mobile) => {
+  const fetchMessages = async (mobile, lastMessageId = null) => {
     try {
       const response = await fetch(
         `https://welcome.spottywifi.app/concierge/chatbot/api/messages.php?codice_spotty=${encodeURIComponent(
@@ -235,11 +358,66 @@ export default function ChatComponent() {
         );
       }
       const data = await response.json();
-      setMessages(data);
+
+      if (lastMessageId !== null) {
+        // Filtra i nuovi messaggi
+        const newMessages = data.filter(
+          (message) => message.id > lastMessageId
+        );
+        if (newMessages.length > 0) {
+          setMessages((prevMessages) => [...prevMessages, ...newMessages]);
+
+          // Aggiorna la chat corrente con l'ultimo messaggio
+          const lastMessage = newMessages[newMessages.length - 1];
+
+          setChats((prevChats) =>
+            prevChats.map((chat) =>
+              chat.id === selectedChat
+                ? {
+                    ...chat,
+                    lastMessage:
+                      lastMessage.content ||
+                      (lastMessage.media_url ? "Media" : ""),
+                    lastMessageSender: lastMessage.sender,
+                    lastMessageType: lastMessage.mime_type
+                      ? lastMessage.mime_type.split("/")[0]
+                      : "text",
+                    time: lastMessage.time,
+                  }
+                : chat
+            )
+          );
+        }
+      } else {
+        // Primo fetch
+        setMessages(data);
+      }
     } catch (error) {
-      setMessages([]);
+      console.error("Errore nel recupero dei messaggi:", error);
+      // Mantieni i messaggi esistenti in caso di errore
     }
   };
+
+  useEffect(() => {
+    let pollingInterval;
+
+    if (selectedChat && codiceSpotty) {
+      // Inizia il polling ogni 5 secondi
+      pollingInterval = setInterval(() => {
+        const lastMessageId =
+          messages.length > 0 ? messages[messages.length - 1].id : null;
+        fetchMessages(selectedChat, lastMessageId);
+      }, 5000);
+    }
+
+    return () => {
+      // Pulisci l'intervallo quando il componente si smonta o quando selectedChat cambia
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+    // Includi 'messages' nelle dipendenze per aggiornare l'intervallo quando cambiano i messaggi
+  }, [selectedChat, codiceSpotty, messages]);
 
   // Update the function signature to accept mediaUrl and mimeType
   const handleSendMessage = async (
@@ -632,57 +810,63 @@ export default function ChatComponent() {
           </div>
         </div>
         <ScrollArea ref={chatListRef} className="flex-grow">
-          {filteredChats.map((chat) => (
-            <div
-              key={chat.id}
-              className={`flex items-center p-3 cursor-pointer hover:bg-[#f5f6f6] ${
-                selectedChat === chat.id ? "bg-[#f0f2f5]" : ""
-              }`}
-              onClick={() => {
-                setSelectedChat(chat.id);
-              }}
-            >
-              <Avatar className="h-12 w-12 mr-3 flex-shrink-0">
-                {chat.avatar ? (
-                  <AvatarImage
-                    src={chat.avatar}
-                    alt={chat.name || "Sconosciuto"}
-                  />
-                ) : (
-                  <AvatarFallback className="bg-[#dfe5e7] text-[#54656f]">
-                    {getInitials(chat.name)}
-                  </AvatarFallback>
-                )}
-              </Avatar>
-              <div className="flex-grow min-w-0">
-                <div className="font-semibold text-[#111b21] truncate">
-                  {chat.name || "Sconosciuto"}
-                </div>
-                <div className="text-sm text-[#667781] truncate">
-                  {chat.lastMessageType === "image" ||
-                  chat.lastMessageType === "media"
-                    ? "📷 immagine"
-                    : chat.lastMessageType === "video"
-                    ? "🎥 video"
-                    : chat.lastMessageType === "document"
-                    ? "📄 documento"
-                    : `${
-                        chat.lastMessageSender === "Me" ? "tu: " : ""
-                      }${truncateMessage(chat.lastMessage || "", 30)}`}
-                </div>
-              </div>
-              <div className="flex flex-col items-end ml-2 flex-shrink-0">
-                <div className="text-xs text-[#667781]">
-                  {chat.displayTime || ""}
-                </div>
-                {chat.unreadCount > 0 && (
-                  <div className="bg-[#25d366] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mt-1">
-                    {chat.unreadCount}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+        {filteredChats.map((chat) => (
+  <div
+    key={chat.id}
+    className={`flex items-center p-3 cursor-pointer hover:bg-[#f5f6f6] ${
+      selectedChat === chat.id ? "bg-[#f0f2f5]" : ""
+    }`}
+    onClick={() => {
+      setSelectedChat(chat.id);
+      setChats((prevChats) =>
+        prevChats.map((c) =>
+          c.id === chat.id ? { ...c, unreadCount: 0 } : c
+        )
+      );
+    }}
+  >
+    <Avatar className="h-12 w-12 mr-3 flex-shrink-0">
+      {chat.avatar ? (
+        <AvatarImage
+          src={chat.avatar}
+          alt={chat.name || "Sconosciuto"}
+        />
+      ) : (
+        <AvatarFallback className="bg-[#dfe5e7] text-[#54656f]">
+          {getInitials(chat.name)}
+        </AvatarFallback>
+      )}
+    </Avatar>
+    <div className="flex-grow min-w-0">
+      <div className="font-semibold text-[#111b21] truncate">
+        {chat.name || "Sconosciuto"}
+      </div>
+      <div className="text-sm text-[#667781] truncate">
+        {chat.lastMessageType === "image" ||
+        chat.lastMessageType === "media"
+          ? "📷 immagine"
+          : chat.lastMessageType === "video"
+          ? "🎥 video"
+          : chat.lastMessageType === "document"
+          ? "📄 documento"
+          : `${
+              chat.lastMessageSender === "Me" ? "tu: " : ""
+            }${truncateMessage(chat.lastMessage || "", 30)}`}
+      </div>
+    </div>
+    <div className="flex flex-col items-end ml-2 flex-shrink-0">
+      <div className="text-xs text-[#667781]">
+        {chat.displayTime || ""}
+      </div>
+      {chat.unreadCount > 0 && (
+        <div className="bg-red-500 text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-xs mt-1 px-1">
+          {chat.unreadCount}
+        </div>
+      )}
+    </div>
+  </div>
+))}
+
         </ScrollArea>
       </div>
 
@@ -764,10 +948,10 @@ export default function ChatComponent() {
                       >
                         {!isSystemMessage(message) ? (
                           <div
-                            className={`max-w-full sm:max-w-md md:max-w-lg p-2 rounded-lg ${
+                            className={`inline-block max-w-[80%] p-2 rounded-lg ${
                               message.sender === "Me"
-                                ? "bg-[#dcf8c6] text-right"
-                                : "bg-white text-left"
+                                ? "bg-[#dcf8c6]"
+                                : "bg-white"
                             }`}
                           >
                             {/* Rendering media content */}
@@ -777,14 +961,14 @@ export default function ChatComponent() {
                                   <img
                                     src={message.media_url}
                                     alt="Immagine"
-                                    className="mb-2 max-w-full h-auto rounded max-h-64"
+                                    className="mb-2 rounded max-w-full max-h-80 object-contain"
                                   />
                                 )}
                                 {message.mime_type.startsWith("video/") && (
                                   <video
                                     src={message.media_url}
                                     controls
-                                    className="mb-2 max-w-full h-auto rounded max-h-64"
+                                    className="mb-2 rounded max-w-full max-h-80"
                                   />
                                 )}
                                 {message.mime_type === "application/pdf" && (
@@ -801,15 +985,18 @@ export default function ChatComponent() {
                             )}
 
                             {/* Rendering formatted text */}
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              className="prose text-sm break-words"
-                            >
-                              {replacePlaceholders(
-                                unescapeMessageContent(message.content),
-                                Object.values(userData)
-                              )}
-                            </ReactMarkdown>
+                            {message.content && (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                className="prose text-sm break-words"
+                              >
+                                {replacePlaceholders(
+                                  unescapeMessageContent(message.content),
+                                  Object.values(userData)
+                                )}
+                              </ReactMarkdown>
+                            )}
+
                             {/* Status indicator */}
                             <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
                               {message.sender === "Me" &&
