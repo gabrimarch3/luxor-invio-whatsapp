@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Search } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
-import { Button } from "@/components/ui/button";
 
 const formatTime = (dateString) => {
   if (!dateString) return "";
@@ -44,12 +43,10 @@ export default function ChatList(props) {
     setContactSearch,
     selectedChat,
     setSelectedChat,
-    setChats,
     chatListRef,
     selectedClient,
     setSelectedClient,
     router,
-    codiceSpotty,
     altriClientiGruppo,
   } = props;
 
@@ -70,7 +67,6 @@ export default function ChatList(props) {
             ${selectedChat ? "hidden md:flex md:w-1/3" : "w-full md:w-1/3"}`}
     >
       <div className="bg-[#f0f2f5] p-4">
-        {/* Select component for other group clients */}
         {altriClientiGruppo.length > 0 && (
           <div className="mb-4">
             <Select
@@ -121,10 +117,7 @@ export default function ChatList(props) {
           >
             <Avatar className="h-12 w-12 mr-3 flex-shrink-0">
               {chat.avatar ? (
-                <AvatarImage
-                  src={chat.avatar}
-                  alt={chat.name || "Sconosciuto"}
-                />
+                <AvatarImage src={chat.avatar} alt={chat.name || "Sconosciuto"} />
               ) : (
                 <AvatarFallback className="bg-[#dfe5e7] text-[#54656f]">
                   {getInitials(chat.name)}
@@ -140,9 +133,6 @@ export default function ChatList(props) {
               <div className="text-xs text-[#667781]">
                 {chat.displayTime}
               </div>
-              {chat.hasNewMessage && (
-                <div className="bg-green-500 rounded-full w-3 h-3 mt-1"></div>
-              )}
             </div>
           </div>
         ))}
