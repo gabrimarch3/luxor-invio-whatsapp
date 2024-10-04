@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getKaleyraConfig, getClientDbConfig, connectToClientDb } from '../../../utils/db';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// Rimuovi questa riga
+// export const config = {
+//   api: {
+//     bodyParser: false,
+//   },
+// };
+
+// Aggiungi questa configurazione
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request) {
   const formData = await request.formData();
