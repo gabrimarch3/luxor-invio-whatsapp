@@ -71,15 +71,14 @@ export async function GET(request) {
   }
 
   try {
-    // Query modificata per includere informazioni sui nuovi messaggi
+    // Query modificata per non utilizzare la colonna 'is_new'
     const [rows] = await clientConnection.execute(
       `
       SELECT 
         sr.mobile AS id, 
         sr.name,
         (SELECT message FROM spottywa_risposte WHERE mobile = sr.mobile ORDER BY created_at DESC LIMIT 1) AS lastMessage,
-        (SELECT created_at FROM spottywa_risposte WHERE mobile = sr.mobile ORDER BY created_at DESC LIMIT 1) AS lastMessageTime,
-        (SELECT COUNT(*) FROM spottywa_risposte WHERE mobile = sr.mobile AND is_new = 1) AS newMessageCount
+        MAX(sr.created_at) AS lastMessageTime
       FROM spottywa_risposte sr
       GROUP BY sr.mobile, sr.name
       ORDER BY MAX(sr.created_at) DESC
@@ -92,8 +91,7 @@ export async function GET(request) {
       name: row.name || row.id,
       lastMessage: row.lastMessage,
       lastMessageTime: row.lastMessageTime,
-      hasNewMessages: row.newMessageCount > 0,
-      newMessageCount: row.newMessageCount
+      // Rimuoviamo hasNewMessages e newMessageCount poiché non abbiamo queste informazioni
     }));
 
     await clientConnection.end();
