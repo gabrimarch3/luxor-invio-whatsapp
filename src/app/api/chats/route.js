@@ -5,10 +5,6 @@ import mysql from 'mysql2/promise';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export const config = {
-  runtime: 'edge',
-};
-
 export async function GET(request) {
   console.log('Inizio della richiesta GET');
   try {
