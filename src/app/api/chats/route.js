@@ -1,50 +1,109 @@
 // app/api/chats/route.js
 
-import pool from '@/lib/db';
+import { NextResponse } from 'next/server';
+import { getClientDbConfig, connectToClientDb, logKaleyraError } from '../../../utils/db';
+import mysql from 'mysql2/promise';
 
 export async function GET(request) {
-  try {
-    const [rows] = await pool.query(`
-      SELECT mobile AS id, name, MAX(created_at) AS lastTime, message AS lastMessage
-      FROM spottywa_risposte
-      GROUP BY mobile
-      ORDER BY lastTime DESC
-    `);
+  const { searchParams } = new URL(request.url);
+  const codiceSpotty = searchParams.get('codice_spotty');
 
+  // Verifica che 'codice_spotty' sia stato fornito
+  if (!codiceSpotty) {
+    return NextResponse.json({ message: 'Codice Spotty non fornito' }, { status: 400 });
+  }
+
+  // Ottieni la configurazione del database del cliente
+  const clientConfig = await getClientDbConfig(codiceSpotty);
+
+  if (!clientConfig) {
+    return NextResponse.json({ message: 'Codice Spotty non valido' }, { status: 400 });
+  }
+
+  const gruppo = clientConfig.Gruppo?.trim() || '';
+  let altriClientiGruppo = [];
+
+  // Recupera altri clienti del gruppo, se esiste un gruppo
+  if (gruppo) {
+    const centralHost = 'node1.spottywifi.it';
+    const centralDb   = 'luxor_spottywifi';
+    const centralUser = 'sql_spottywifi';
+    const centralPass = 'VAJHyyVnFxxiXYLM';
+    const charset = 'utf8mb4';
+    
+    try {
+      const centralConnection = await mysql.createConnection({
+        host: centralHost,
+        user: centralUser,
+        password: centralPass,
+        database: centralDb,
+        charset: charset,
+        multipleStatements: false,
+      });
+
+      // Imposta la codifica corretta
+      await centralConnection.execute(`SET NAMES 'utf8mb4'`);
+
+      const [rows] = await centralConnection.execute(
+        `
+        SELECT CodiceCliente, NomeCliente 
+        FROM adm_Clienti 
+        WHERE TRIM(LOWER(Gruppo)) = TRIM(LOWER(?))
+        AND CodiceCliente <> ?
+        `,
+        [gruppo.toLowerCase(), codiceSpotty]
+      );
+
+      altriClientiGruppo = rows;
+      await centralConnection.end();
+    } catch (error) {
+      console.error('Errore nel recupero dei clienti del gruppo:', error.message);
+      return NextResponse.json({ message: 'Errore nel recupero dei clienti del gruppo' }, { status: 500 });
+    }
+  }
+
+  // Connettiti al database del cliente
+  const clientConnection = await connectToClientDb(clientConfig);
+
+  if (!clientConnection) {
+    return NextResponse.json({ message: 'Connessione al database del cliente fallita' }, { status: 500 });
+  }
+
+  try {
+    // Query modificata per includere informazioni sui nuovi messaggi
+    const [rows] = await clientConnection.execute(
+      `
+      SELECT 
+        sr.mobile AS id, 
+        sr.name,
+        (SELECT message FROM spottywa_risposte WHERE mobile = sr.mobile ORDER BY created_at DESC LIMIT 1) AS lastMessage,
+        (SELECT created_at FROM spottywa_risposte WHERE mobile = sr.mobile ORDER BY created_at DESC LIMIT 1) AS lastMessageTime,
+        (SELECT COUNT(*) FROM spottywa_risposte WHERE mobile = sr.mobile AND is_new = 1) AS newMessageCount
+      FROM spottywa_risposte sr
+      GROUP BY sr.mobile, sr.name
+      ORDER BY MAX(sr.created_at) DESC
+      `
+    );
+
+    // Mappa i risultati della query in un array con formato corretto
     const chats = rows.map(row => ({
       id: row.id,
       name: row.name || row.id,
-      lastMessage: extractMessageText(row.lastMessage),
-      time: formatTime(row.lastTime),
-      avatar: null,
-      unreadCount: 0,
+      lastMessage: row.lastMessage,
+      lastMessageTime: row.lastMessageTime,
+      hasNewMessages: row.newMessageCount > 0,
+      newMessageCount: row.newMessageCount
     }));
 
-    return new Response(JSON.stringify(chats), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    await clientConnection.end();
+
+    // Preparazione della risposta JSON
+    return NextResponse.json({
+      chats: chats,
+      altriClientiGruppo: altriClientiGruppo,
     });
   } catch (error) {
-    console.error('Errore nel recupero delle chat:', error);
-    return new Response(JSON.stringify({ message: 'Errore nel recupero delle chat' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    console.error('Errore nel recupero delle chat:', error.message);
+    return NextResponse.json({ message: 'Errore nel recupero delle chat' }, { status: 500 });
   }
 }
-
-const extractMessageText = (messageJSON) => {
-  try {
-    const messageArray = JSON.parse(messageJSON);
-    const messageData = messageArray[0];
-    return messageData.text ? messageData.text.body : '';
-  } catch (error) {
-    console.error('Errore nel parsing del messaggio:', error);
-    return '';
-  }
-};
-
-const formatTime = (date) => {
-  const d = new Date(date);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};

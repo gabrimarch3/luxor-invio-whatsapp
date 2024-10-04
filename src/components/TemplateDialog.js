@@ -1,19 +1,58 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+// components/TemplateDialog.js
 
-export default function TemplateDialog({ codiceSpotty, handleTemplateSelect }) {
-  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("it");
+import { useState, useEffect } from "react";
+import { format } from "date-fns"; // Aggiungi questa importazione
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogHeader,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  Video as VideoIcon,
+  FileText,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+export default function TemplateDialog(props) {
+  const {
+    isTemplateDialogOpen,
+    setIsTemplateDialogOpen,
+    handleSendMessage,
+    codiceSpotty,
+    selectedChat,
+    scrollToBottom,
+  } = props;
+
   const [templatesByLanguage, setTemplatesByLanguage] = useState({});
+  const [selectedLanguage, setSelectedLanguage] = useState("it");
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [errorTemplates, setErrorTemplates] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateType, setTemplateType] = useState('all'); // Nuovo stato per il filtro
 
-  const TEMPLATES_PER_PAGE = 6;
+  useEffect(() => {
+    if (isTemplateDialogOpen) {
+      fetchTemplates();
+    }
+  }, [isTemplateDialogOpen]);
 
   const fetchTemplates = async () => {
     if (!codiceSpotty) return;
@@ -23,15 +62,15 @@ export default function TemplateDialog({ codiceSpotty, handleTemplateSelect }) {
 
     try {
       const response = await fetch(
-        `https://welcome.spottywifi.app/concierge/chatbot/api/templates.php?codice_spotty=${encodeURIComponent(codiceSpotty)}`
+        `/api/templates?codice_spotty=${codiceSpotty}`
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Errore HTTP! status: ${response.status} - ${errorData.message}`);
+        throw new Error("Errore nel recupero dei template");
       }
 
       const data = await response.json();
+
       if (data.templates) {
         setTemplatesByLanguage(data.templates);
       } else {
@@ -45,11 +84,86 @@ export default function TemplateDialog({ codiceSpotty, handleTemplateSelect }) {
     }
   };
 
-  useEffect(() => {
-    if (isTemplateDialogOpen) {
-      fetchTemplates();
+  const handleTemplateSelect = async (template) => {
+    if (
+      !template ||
+      !template.NomeTemplate ||
+      !selectedChat ||
+      !codiceSpotty
+    ) {
+      console.error("Parametri mancanti per l'invio del template.");
+      return;
     }
-  }, [isTemplateDialogOpen]);
+
+    let endpoint = '/api/send-template';
+    let method = 'POST';
+    let body;
+    let queryParams;
+
+    if (template.IsMediaTemplate) {
+      endpoint = '/api/send-media-template';
+      const formData = new FormData();
+      formData.append('codice_spotty', codiceSpotty);
+      formData.append('mobile', selectedChat);
+      formData.append('template_name', template.NomeTemplate);
+      formData.append('lang_code', selectedLanguage);
+      formData.append('media_url', `https://media.spottywifi.app/wa/${codiceSpotty.replace("spotty", "")}/images/${template.Immagine}`);
+      formData.append('caption', template.CorpoMessaggio);
+      body = formData;
+    } else {
+      // Per i template di testo, usiamo i query params
+      queryParams = new URLSearchParams({
+        codice_spotty: codiceSpotty,
+        mobile: selectedChat,
+        template_name: template.NomeTemplate,
+        lang_code: selectedLanguage,
+        params: template.CorpoMessaggio
+      });
+      endpoint = `${endpoint}?${queryParams.toString()}`;
+      method = 'GET';
+    }
+
+    console.log(`Invio template ${template.IsMediaTemplate ? 'con media' : 'di testo'} a ${endpoint}`);
+    console.log('Dati inviati:', template.IsMediaTemplate ? Object.fromEntries(body) : queryParams.toString());
+
+    try {
+      const response = await fetch(endpoint, {
+        method: method,
+        ...(template.IsMediaTemplate ? { body } : {}),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Errore nella risposta del server:", errorData);
+        throw new Error("Errore nell'invio del template");
+      }
+
+      const data = await response.json();
+      console.log("Template inviato con successo:", data);
+
+    } catch (error) {
+      console.error("Errore nell'invio del template:", error);
+    }
+
+    setIsTemplateDialogOpen(false);
+    setSelectedTemplate(null);
+    scrollToBottom();
+  };
+
+  // Funzione di utilità per ottenere il MIME type dall'estensione del file
+  const getMimeType = (filename) => {
+    const ext = filename.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'mp4': 'video/mp4',
+      'pdf': 'application/pdf',
+      // Aggiungi altri tipi MIME se necessario
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  };
 
   const handleLanguageChange = (language) => {
     setSelectedLanguage(language);
@@ -62,12 +176,58 @@ export default function TemplateDialog({ codiceSpotty, handleTemplateSelect }) {
     setSelectedTemplate(null);
   };
 
-  const templates = templatesByLanguage[selectedLanguage] || [];
-  const totalPages = Math.ceil(templates.length / TEMPLATES_PER_PAGE);
-  const currentTemplates = templates.slice((currentPage - 1) * TEMPLATES_PER_PAGE, currentPage * TEMPLATES_PER_PAGE);
+  const handleTemplateClick = (template) => {
+    setSelectedTemplate(template);
+  };
+
+  const closePreview = () => {
+    setSelectedTemplate(null);
+  };
+
+  const unescapeMessageContent = (content) => {
+    if (!content) return "";
+    return content
+      .replace(/\\n/g, "\n")
+      .replace(/\\t/g, "\t")
+      .replace(/\\\\/g, "\\");
+  };
+
+  const validTemplatesByLanguage =
+    templatesByLanguage && typeof templatesByLanguage === "object"
+      ? templatesByLanguage
+      : {};
+
+  const templates = validTemplatesByLanguage[selectedLanguage] || [];
+
+  // Funzione per filtrare i template
+  const filterTemplates = (templates) => {
+    switch(templateType) {
+      case 'text':
+        return templates.filter(t => !t.IsMediaTemplate);
+      case 'media':
+        return templates.filter(t => t.IsMediaTemplate);
+      default:
+        return templates;
+    }
+  };
+
+  const filteredTemplates = filterTemplates(templates);
+
+  const TEMPLATES_PER_PAGE = 6;
+  const totalPages = Math.ceil(filteredTemplates.length / TEMPLATES_PER_PAGE);
+  const currentTemplates = filteredTemplates.slice(
+    (currentPage - 1) * TEMPLATES_PER_PAGE,
+    currentPage * TEMPLATES_PER_PAGE
+  );
 
   return (
-    <Dialog open={isTemplateDialogOpen} onOpenChange={(open) => setIsTemplateDialogOpen(open)}>
+    <Dialog
+      open={isTemplateDialogOpen}
+      onOpenChange={(open) => {
+        setIsTemplateDialogOpen(open);
+        setSelectedTemplate(null);
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="ghost" className="text-[#54656f]">
           Template
@@ -77,45 +237,185 @@ export default function TemplateDialog({ codiceSpotty, handleTemplateSelect }) {
         <div className="space-y-4 p-4 bg-background">
           <DialogHeader>
             <DialogTitle>Seleziona un template</DialogTitle>
-            <DialogDescription>Scegli uno dei template disponibili per inviare un messaggio predefinito.</DialogDescription>
+            <DialogDescription>
+              Scegli uno dei template disponibili per inviare un messaggio
+              predefinito.
+            </DialogDescription>
           </DialogHeader>
-          <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Seleziona una lingua" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.keys(templatesByLanguage).length > 0
-                ? Object.keys(templatesByLanguage).map((lang) => (
+          {/* Language Selector */}
+          <div className="max-w-xs mx-auto">
+            <Select
+              value={selectedLanguage}
+              onValueChange={handleLanguageChange}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Seleziona una lingua" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(validTemplatesByLanguage).length > 0 ? (
+                  Object.keys(validTemplatesByLanguage).map((lang) => (
                     <SelectItem key={lang} value={lang}>
                       {lang.toUpperCase()}
                     </SelectItem>
                   ))
-                : null}
-            </SelectContent>
-          </Select>
+                ) : (
+                  <SelectItem value="it">IT</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
+          {/* Aggiunta del filtro per tipo di template */}
+          <div className="max-w-xs mx-auto">
+            <Select value={templateType} onValueChange={setTemplateType}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filtra per tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tutti i template</SelectItem>
+                <SelectItem value="text">Solo testo</SelectItem>
+                <SelectItem value="media">Con media</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Template List or Preview */}
           {selectedTemplate ? (
-            <div>
-              <Button onClick={() => handleTemplateSelect(selectedTemplate)}>Invia Template</Button>
-            </div>
-          ) : (
-            <div>
-              {currentTemplates.map((template) => (
-                <div key={template.Uuid} onClick={() => setSelectedTemplate(template)}>
-                  {template.Nome}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={closePreview}
+                className="absolute top-2 right-2 z-10"
+              >
+                <X className="h-6 w-6" />
+              </Button>
+              {/* Anteprima del messaggio */}
+              <div className="flex justify-end mt-8">
+                <div
+                  className="max-w-full sm:max-w-md md:max-w-lg p-2 rounded-lg bg-[#dcf8c6] text-right"
+                  style={{ overflowWrap: "break-word" }}
+                >
+                  {/* Mostra solo i media nell'anteprima */}
+                  {selectedTemplate.Immagine && (
+                    <div className="mb-2">
+                      {selectedTemplate.Immagine.endsWith(".pdf") ? (
+                        <div className="flex items-center justify-center">
+                          <FileText className="w-12 h-12 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">PDF</p>
+                        </div>
+                      ) : /\.(mp4|mov|avi|mkv)$/i.test(
+                          selectedTemplate.Immagine
+                        ) ? (
+                        <video
+                          src={`https://media.spottywifi.app/wa/${codiceSpotty.replace(
+                            "spotty",
+                            ""
+                          )}/images/${selectedTemplate.Immagine}`}
+                          controls
+                          className="mb-2 max-w-full h-auto rounded max-h-64"
+                        />
+                      ) : (
+                        <img
+                          src={`https://media.spottywifi.app/wa/${codiceSpotty.replace(
+                            "spotty",
+                            ""
+                          )}/images/${selectedTemplate.Immagine}`}
+                          alt={selectedTemplate.Nome}
+                          className="mb-2 max-w-full h-auto rounded max-h-64"
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Contenuto del messaggio */}
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    className="prose text-sm break-words"
+                  >
+                    {unescapeMessageContent(selectedTemplate.CorpoMessaggio)}
+                  </ReactMarkdown>
+                  {/* Orario */}
+                  <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
+                    {format(new Date(), "HH:mm")}
+                  </div>
                 </div>
+              </div>
+              <div className="flex justify-end mt-4">
+                <Button
+                  onClick={() => {
+                    handleTemplateSelect(selectedTemplate);
+                  }}
+                  className="mt-4"
+                >
+                  Invia Template
+                </Button>
+              </div>
+            </div>
+          ) : filteredTemplates.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {currentTemplates.map((template) => (
+                <Card
+                  key={template.Uuid}
+                  className="hover:bg-accent transition-colors cursor-pointer"
+                  onClick={() => handleTemplateClick(template)}
+                >
+                  <CardHeader className="p-0 overflow-hidden">
+                    <div className="w-full h-32 bg-muted rounded-t-lg flex items-center justify-center">
+                      {template.IsMediaTemplate ? (
+                        // ... (logica per visualizzare l'anteprima del media)
+                        <div className="flex flex-col items-center">
+                          <ImageIcon className="w-12 h-12 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Media</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <FileText className="w-12 h-12 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Testo</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-3">
+                    <h3 className="text-sm font-semibold text-foreground truncate">
+                      {template.Nome}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      {template.NomeTemplate}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Tipo: {template.IsMediaTemplate ? 'Media' : 'Testo'}
+                    </p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
+          ) : (
+            <p className="text-center text-muted-foreground">
+              Nessun template disponibile per i criteri selezionati.
+            </p>
           )}
-
-          {totalPages > 1 && (
+          {/* Pagination */}
+          {totalPages > 1 && !selectedTemplate && (
             <div className="flex justify-between items-center mt-4">
-              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => changePage(currentPage - 1)}
+              >
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Precedente
               </Button>
-              <span className="text-sm text-muted-foreground">Pagina {currentPage} di {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => changePage(currentPage + 1)}>
+              <span className="text-sm text-muted-foreground">
+                Pagina {currentPage} di {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === totalPages}
+                onClick={() => changePage(currentPage + 1)}
+              >
                 Successiva
                 <ChevronRight className="h-4 w-4 ml-2" />
               </Button>

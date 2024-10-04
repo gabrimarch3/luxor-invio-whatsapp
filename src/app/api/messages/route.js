@@ -1,24 +1,79 @@
 // app/api/messages/route.js
 
-import pool from '@/lib/db';
+import { NextResponse } from 'next/server';
+import { getClientDbConfig, connectToClientDb, logKaleyraError } from '../../../utils/db';
+import mysql from 'mysql2/promise';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
+  const encryptedCodiceSpotty = searchParams.get('codice_spotty');
   const mobile = searchParams.get('mobile');
 
-  if (!mobile) {
-    return new Response(
-      JSON.stringify({ message: 'Numero di telefono non fornito' }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+  // Verifica che 'codice_spotty' e 'mobile' siano stati forniti
+  if (!encryptedCodiceSpotty) {
+    return NextResponse.json({ message: 'Codice Spotty non fornito' }, { status: 400 });
   }
+
+  if (!mobile) {
+    return NextResponse.json({ message: 'Numero di telefono non fornito' }, { status: 400 });
+  }
+
+  // Funzione di decriptazione (implementa la tua logica se necessaria)
+  const decryptCodiceSpotty = (encrypted) => {
+    // Implementa la tua logica di decriptazione qui
+    // Se non necessiti di decriptazione, ritorna direttamente il valore
+    return encrypted;
+  };
+
+  const codiceSpotty = decryptCodiceSpotty(encryptedCodiceSpotty);
+
+  if (!codiceSpotty) {
+    return NextResponse.json({ message: 'Codice Spotty non valido' }, { status: 400 });
+  }
+
+  // Rimuove il prefisso 'spotty' dal codice spotty
+  const codiceSpottyWithoutPrefix = codiceSpotty.replace('spotty', '');
+
+  // Ottieni i dettagli di connessione al database del cliente
+  const clientConfig = await getClientDbConfig(codiceSpotty);
+
+  if (!clientConfig) {
+    return NextResponse.json({ message: 'Configurazione cliente non trovata' }, { status: 400 });
+  }
+
+  // Connettiti al database del cliente
+  const clientConnection = await connectToClientDb(clientConfig);
+
+  if (!clientConnection) {
+    return NextResponse.json({ message: 'Connessione al database del cliente fallita' }, { status: 500 });
+  }
+
+  // Funzione per rimuovere le linee di data dal contenuto del messaggio
+  const removeDateLines = (content) => {
+    if (!content) return '';
+    const lines = content.split('\n');
+    const filteredLines = lines.filter(line => !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(line.trim()));
+    return filteredLines.join('\n');
+  };
+
+  // Funzione per ottenere il mime type dall'estensione del file
+  const getMimeType = (filename) => {
+    const ext = filename.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      mp4: 'video/mp4',
+      pdf: 'application/pdf',
+      // Aggiungi altri tipi se necessario
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  };
 
   try {
     // Query per recuperare i messaggi ricevuti (con media)
-    const [receivedRows] = await pool.query(
+    const [receivedRows] = await clientConnection.execute(
       `
       SELECT
         id,
@@ -31,26 +86,26 @@ export async function GET(request) {
         'received' AS direction
       FROM spottywa_risposte
       WHERE mobile = ?
-    `,
+      `,
       [mobile]
     );
 
-    // Query per recuperare i messaggi inviati (senza media)
-    const [sentRows] = await pool.query(
+    // Query per recuperare i messaggi inviati (con media)
+    const [sentRows] = await clientConnection.execute(
       `
       SELECT
-        Id AS id,
+        liw.Id AS id,
         'Me' AS sender,
         NULL AS name,
-        Messaggio AS message,
-        NULL AS media_url,      -- Nessun media per i messaggi inviati
-        NULL AS mime_type,      -- Nessun mime_type per i messaggi inviati
-        Data AS time,
+        liw.Messaggio AS message,
+        sm.Immagine AS media_url,
+        liw.Data AS time,
         'sent' AS direction,
-        Status
-      FROM LogInvioWhatsApp
-      WHERE Telefono = ?
-    `,
+        liw.Status
+      FROM LogInvioWhatsApp liw
+      LEFT JOIN spottymkt_messaggi sm ON liw.NomeTemplate = sm.NomeTemplate
+      WHERE liw.Telefono = ?
+      `,
       [mobile]
     );
 
@@ -62,23 +117,20 @@ export async function GET(request) {
 
     // Mappa i messaggi per adattarli al formato richiesto
     const messages = allMessages
-      .map((row) => {
+      .map(row => {
         let content = '';
 
-        // Parsing del messaggio per i messaggi ricevuti
         if (row.direction === 'received') {
           try {
-            const messageData = JSON.parse(row.message)[0];
-            content = messageData.text ? messageData.text.body : '';
+            const messageData = JSON.parse(row.message);
+            if (messageData[0]?.text?.body) {
+              content = messageData[0].text.body;
+            }
           } catch (error) {
-            console.error(
-              `Errore nel parsing del messaggio ricevuto con id ${row.id}:`,
-              error
-            );
+            console.error(`Errore nel parsing del messaggio ricevuto con id ${row.id}:`, error.message);
             content = '';
           }
         } else {
-          // Messaggio inviato
           content = row.message || '';
         }
 
@@ -87,48 +139,44 @@ export async function GET(request) {
 
         // Verifica che la data sia valida
         const messageDate = new Date(row.time);
-        if (isNaN(messageDate)) {
-          console.error(`Data non valida per il messaggio con id ${row.id}:`, row.time);
+        if (isNaN(messageDate.getTime())) {
+          console.error(`Data non valida per il messaggio con id ${row.id}: ${row.time}`);
           return null; // Esclude i messaggi con date non valide
+        }
+
+        // Deriva il mime_type dall'estensione del file se media_url è presente
+        let mime_type = null;
+        let media_url = row.media_url || null;
+
+        if (media_url) {
+          mime_type = getMimeType(media_url);
+
+          // Verifica se media_url inizia con 'http://' o 'https://'
+          if (!/^https?:\/\//.test(media_url)) {
+            // Costruisce il media_url secondo il formato richiesto
+            const imageName = media_url;
+            media_url = `https://media.spottywifi.app/wa/${codiceSpottyWithoutPrefix}/images/${imageName}`;
+          }
         }
 
         return {
           id: row.id,
           sender: row.sender,
-          content,
-          media_url: row.media_url || null, // Aggiungi media_url se presente
-          mime_type: row.mime_type || null, // Aggiungi mime_type se presente
-          time: messageDate.toISOString(), // Restituisce il timestamp completo
+          content: content,
+          media_url: media_url,
+          mime_type: mime_type,
+          time: messageDate.toISOString(), // ISO 8601
           status: row.Status || null, // Solo per i messaggi inviati
-          isSystem: row.sender === 'System', // Flag per messaggi di sistema
+          isSystem: row.sender === 'System',
         };
       })
-      .filter((message) => message !== null); // Rimuove i messaggi null
+      .filter(message => message !== null); // Rimuove i messaggi null
 
-    return new Response(JSON.stringify(messages), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    await clientConnection.end();
+
+    return NextResponse.json(messages);
   } catch (error) {
-    console.error('Errore nel recupero dei messaggi:', error);
-    return new Response(
-      JSON.stringify({
-        message: 'Errore nel recupero dei messaggi',
-        error: error.message,
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    console.error('Errore nel recupero dei messaggi:', error.message);
+    return NextResponse.json({ message: 'Errore nel recupero dei messaggi' }, { status: 500 });
   }
 }
-
-// Funzione per rimuovere le linee di data dal contenuto del messaggio
-const removeDateLines = (content) => {
-  if (!content) return '';
-  const lines = content.split('\n');
-  const datePattern = /^\d{1,2}\/\d{1,2}\/\d{4}$/; // Regex per date nel formato dd/MM/yyyy
-  const filteredLines = lines.filter((line) => !datePattern.test(line.trim()));
-  return filteredLines.join('\n');
-};

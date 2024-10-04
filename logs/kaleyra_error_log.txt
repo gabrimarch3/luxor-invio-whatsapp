@@ -1,0 +1,2 @@
+[2024-10-04T13:07:02.148Z] Connessione al database del cliente fallita: Access denied for user ''@'host-79-8-76-143.business.telecomitalia.it' (using password: NO) | Dettagli Connessione: {"Host":"213.152.202.187","Charset":"utf8mb4"}
+[2024-10-04T13:11:36.502Z] Connessione al database del cliente fallita: Access denied for user ''@'host-79-8-76-143.business.telecomitalia.it' (using password: NO) | Dettagli Connessione: {"Host":"213.152.202.187","Charset":"utf8mb4"}
