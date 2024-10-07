@@ -4,6 +4,9 @@ import { NextResponse } from 'next/server';
 import { getClientDbConfig, connectToClientDb, logKaleyraError } from '../../../utils/db';
 import mysql from 'mysql2/promise';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const codiceSpotty = searchParams.get('codice_spotty');
