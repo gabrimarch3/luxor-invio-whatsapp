@@ -4,12 +4,6 @@ import { getKaleyraConfig, getClientDbConfig, connectToClientDb } from '../../..
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 export async function POST(request) {
   // Il resto del codice rimane invariato
   // ...
