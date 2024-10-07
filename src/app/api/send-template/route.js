@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getKaleyraConfig, getClientDbConfig, connectToClientDb } from '../../../utils/db';
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const codice_spotty = searchParams.get('codice_spotty');
