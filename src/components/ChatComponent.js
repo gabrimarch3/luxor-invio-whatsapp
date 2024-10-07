@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { format } from "date-fns";
+import { format, differenceInHours } from "date-fns";
 import {
   ArrowDown,
   MessageCircle,
@@ -49,8 +49,6 @@ export default function ChatComponent() {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const messagesEndRef = useRef(null);
 
-  const [lastMessageId, setLastMessageId] = useState(null);
-
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     setIsAtBottom(true);
@@ -71,23 +69,23 @@ export default function ChatComponent() {
   }, [codiceSpotty]);
 
   useEffect(() => {
-    let intervalId;
-
-    if (selectedChat && codiceSpotty && isAtBottom) {
-      const fetchNewMessages = async () => {
-        await fetchMessages(selectedChat, lastMessageId);
-      };
-
-      fetchNewMessages(); // Esegui immediatamente
-      intervalId = setInterval(fetchNewMessages, 5000); // Poi ogni 5 secondi
+    if (selectedChat && codiceSpotty) {
+      setMessages([]); // Resetta i messaggi quando cambia la chat
+      fetchMessages(selectedChat);
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
+          chat.id === selectedChat ? { ...chat, unreadCount: 0 } : chat
+        )
+      );
+      setIsPolling(true); // Avvia il polling
+    } else {
+      setIsPolling(false); // Ferma il polling se non c'è una chat selezionata
     }
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      setIsPolling(false); // Assicurati di fermare il polling quando il componente viene smontato
     };
-  }, [selectedChat, codiceSpotty, isAtBottom, lastMessageId]);
+  }, [selectedChat, codiceSpotty]);
 
   useEffect(() => {
     if (isAtBottom) {
@@ -111,13 +109,13 @@ export default function ChatComponent() {
   };
 
   // Funzione per recuperare i messaggi
-  const fetchMessages = useCallback(async (mobile, lastMsgId = null) => {
+  const fetchMessages = useCallback(async (mobile, lastMessageId = null) => {
     if (!codiceSpotty || !mobile) return;
 
     try {
       let url = `/api/messages?codice_spotty=${codiceSpotty}&mobile=${mobile}`;
-      if (lastMsgId) {
-        url += `&lastMessageId=${lastMsgId}`;
+      if (lastMessageId) {
+        url += `&lastMessageId=${lastMessageId}`;
       }
       const response = await fetch(url);
       if (!response.ok) {
@@ -127,24 +125,52 @@ export default function ChatComponent() {
       
       setMessages(prevMessages => {
         const newMessages = [...prevMessages, ...data];
-        const uniqueMessages = Array.from(new Map(newMessages.map(item => [item.id, item])).values());
-        if (uniqueMessages.length > 0) {
-          setLastMessageId(uniqueMessages[uniqueMessages.length - 1].id);
-        }
-        return uniqueMessages;
+        // Rimuovi duplicati basandoti sull'ID del messaggio
+        return Array.from(new Map(newMessages.map(item => [item.id, item])).values());
       });
 
       // Aggiorna le chat con l'ultimo messaggio
       if (data.length > 0) {
         const lastMessage = data[data.length - 1];
-        setChats(prevChats => prevChats.map(chat => 
-          chat.id === mobile ? { ...chat, lastMessage: lastMessage.content, lastMessageTime: lastMessage.time } : chat
-        ));
+        updateChat(mobile, lastMessage);
       }
     } catch (error) {
       console.error("Errore nel recupero dei messaggi:", error);
     }
   }, [codiceSpotty]);
+
+  // Nuova funzione per aggiornare una singola chat
+  const updateChat = (mobile, lastMessage) => {
+    setChats(prevChats => prevChats.map(chat => {
+      if (chat.id === mobile) {
+        return {
+          ...chat,
+          lastMessage: lastMessage.content,
+          lastMessageTime: lastMessage.time,
+          hasNewMessage: chat.id !== selectedChat && lastMessage.sender !== "Me",
+        };
+      }
+      return chat;
+    }));
+  };
+
+  // Polling per aggiornare i messaggi
+  useEffect(() => {
+    let pollingInterval;
+
+    if (isPolling && selectedChat && codiceSpotty) {
+      pollingInterval = setInterval(() => {
+        const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+        fetchMessages(selectedChat, lastMessageId);
+      }, 5000);
+    }
+
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [isPolling, selectedChat, codiceSpotty, messages, fetchMessages]);
 
   // Funzione per inviare un messaggio
   const handleSendMessage = async (
@@ -173,7 +199,10 @@ export default function ChatComponent() {
           ? {
               ...chat,
               lastMessage: newMessage.content || (mediaUrl ? "Media" : ""),
-              lastMessageTime: newMessage.time,
+              lastMessageSender: "Me",
+              lastMessageType: mimeType ? mimeType.split("/")[0] : "text",
+              time: newMessage.time,
+              hasNewMessage: false,
             }
           : chat
       )
@@ -249,9 +278,11 @@ export default function ChatComponent() {
   // Aggiungi questa nuova funzione
   const handleChatSelect = (chatId) => {
     setSelectedChat(chatId);
-    setLastMessageId(null); // Resetta lastMessageId quando si seleziona una nuova chat
-    setMessages([]); // Pulisci i messaggi esistenti
-    fetchMessages(chatId); // Carica i messaggi per la nuova chat selezionata
+    setChats((prevChats) =>
+      prevChats.map((chat) =>
+        chat.id === chatId ? { ...chat, hasNewMessage: false } : chat
+      )
+    );
   };
 
   // Renderizzazione del componente

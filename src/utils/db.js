@@ -3,6 +3,7 @@
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
+import { logKaleyraError } from './logging';
 
 // Abilitare o disabilitare la modalità di debug
 const DEBUG_MODE = true;
@@ -74,36 +75,22 @@ export async function getClientDbConfig(codiceSpotty) {
 
 // Funzione per connettersi al database del cliente
 export async function connectToClientDb(clientConfig) {
-  // Imposta l'host del database del cliente su un IP fisso
-  const host = '213.152.202.187'; // IP fisso del database del cliente
-  const db   = clientConfig.NomeDatabase;
-  const user = clientConfig.UtenteDatabase;
-  const pass = clientConfig.PasswordDatabase;
-  const charset = 'utf8mb4'; // Assicurati che il charset sia coerente
-
-  const dsn = `mysql://${user}:${pass}@${host}/${db}?charset=${charset}`;
-
+  const startTime = Date.now();
   try {
     const clientConnection = await mysql.createConnection({
-      host: host,
-      user: user,
-      password: pass,
-      database: db,
-      charset: charset,
+      host: '213.152.202.187', // IP fisso del database del cliente
+      user: clientConfig.UtenteDatabase,
+      password: clientConfig.PasswordDatabase,
+      database: clientConfig.NomeDatabase,
+      charset: 'utf8mb4', // Assicurati che il charset sia coerente
       multipleStatements: false,
     });
-
-    console.log('Connessione al database del cliente riuscita.');
+    const endTime = Date.now();
+    console.log(`Connessione al DB completata in ${endTime - startTime}ms`);
     return clientConnection;
   } catch (error) {
-    const connectionDetails = {
-      Host: host,
-      Database: db,
-      User: user,
-      Charset: charset,
-    };
-    const logMessage = `Connessione al database del cliente fallita: ${error.message} | Dettagli Connessione: ${JSON.stringify(connectionDetails)}`;
-    logKaleyraError(logMessage);
+    const endTime = Date.now();
+    logKaleyraError(`Connessione al DB fallita dopo ${endTime - startTime}ms: ${error.message}`);
     return null;
   }
 }
@@ -172,3 +159,23 @@ export async function getKaleyraConfig(codiceSpotty) {
     return null;
   }
 }
+
+// Esempio di implementazione di un timeout per le query
+const queryWithTimeout = async (connection, query, params, timeout = 5000) => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('Query timeout'));
+    }, timeout);
+
+    connection.query(query, params, (error, results) => {
+      clearTimeout(timer);
+      if (error) {
+        reject(error);
+      } else {
+        resolve(results);
+      }
+    });
+  });
+};
+
+// Usa questa funzione invece di connection.query direttamente
