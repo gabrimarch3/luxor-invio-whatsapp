@@ -1,13 +1,15 @@
-// app/api/templates/route.js
-
+// Importazione delle dipendenze necessarie
 import { NextResponse } from 'next/server';
 import { getClientDbConfig, connectToClientDb, logKaleyraError } from '../../../utils/db';
 import mysql from 'mysql2/promise';
 
+// Configurazione per Next.js: forza il rendering dinamico e usa il runtime Node.js
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Funzione principale per gestire le richieste GET
 export async function GET(request) {
+  // Estrazione dei parametri dalla query string
   const { searchParams } = new URL(request.url);
   const codiceSpotty = searchParams.get('codice_spotty');
 
@@ -16,16 +18,18 @@ export async function GET(request) {
     return NextResponse.json({ message: 'Codice Spotty non fornito' }, { status: 400 });
   }
 
-  // Ottieni la configurazione del database del cliente
+  // Recupero della configurazione del database del cliente
   const clientConfig = await getClientDbConfig(codiceSpotty);
 
+  // Verifica della validità del codice Spotty
   if (!clientConfig) {
     return NextResponse.json({ message: 'Codice Spotty non valido' }, { status: 400 });
   }
 
-  // Connettiti al database del cliente
+  // Connessione al database del cliente
   const clientConnection = await connectToClientDb(clientConfig);
 
+  // Verifica della connessione al database
   if (!clientConnection) {
     return NextResponse.json({ message: 'Connessione al database del cliente fallita' }, { status: 500 });
   }
@@ -60,16 +64,18 @@ export async function GET(request) {
       `
     );
 
-    // Organizza i template per lingua
+    // Organizzazione dei template per lingua
     const groupedByLanguage = {};
 
     templates.forEach(template => {
       const language = template.Lingua;
 
+      // Inizializzazione dell'array per la lingua se non esiste
       if (!groupedByLanguage[language]) {
         groupedByLanguage[language] = [];
       }
 
+      // Aggiunta del template all'array della lingua corrispondente
       groupedByLanguage[language].push({
         Uuid: template.Uuid,
         Nome: template.Nome,
@@ -82,14 +88,17 @@ export async function GET(request) {
         DataModifica: template.DataModifica,
         CorpoMessaggio: template.CorpoMessaggio,
         Oggetto: template.Oggetto,
-        IsMediaTemplate: !!template.Immagine // Aggiungiamo questo campo per distinguere i template con media
+        IsMediaTemplate: !!template.Immagine // Flag per distinguere i template con media
       });
     });
 
+    // Chiusura della connessione al database
     await clientConnection.end();
 
+    // Restituzione dei template organizzati per lingua
     return NextResponse.json({ templates: groupedByLanguage });
   } catch (error) {
+    // Gestione degli errori durante il recupero dei template
     console.error('Errore nel recupero dei template:', error.message);
     return NextResponse.json({ message: 'Errore nel recupero dei template' }, { status: 500 });
   }

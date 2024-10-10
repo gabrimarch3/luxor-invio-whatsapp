@@ -1,3 +1,4 @@
+// Importazione delle dipendenze necessarie
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -14,21 +15,26 @@ import {
   MoreVertical,
 } from "lucide-react";
 
+// Importazione dei componenti personalizzati
 import ChatList from "./ChatList";
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
 import TemplateDialog from "./TemplateDialog";
 
+// Componente principale per la gestione della chat
 export default function ChatComponent() {
+  // Hooks per la gestione dei parametri di ricerca e del routing
   const searchParams = useSearchParams();
   const router = useRouter();
   const codicespottyParam = searchParams.get("codicespotty");
 
+  // Stati per la gestione del cliente selezionato e del codice Spotty
   const [selectedClient, setSelectedClient] = useState(
     codicespottyParam || null
   );
   const codiceSpotty = selectedClient ? `spotty${selectedClient}` : null;
 
+  // Stati per la gestione delle chat, dei messaggi e delle ricerche
   const [chats, setChats] = useState([]);
   const [altriClientiGruppo, setAltriClientiGruppo] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
@@ -39,22 +45,27 @@ export default function ChatComponent() {
   const [isChatDisabled, setIsChatDisabled] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
 
+  // Riferimenti per la gestione dello scroll e della visualizzazione
   const chatListRef = useRef(null);
   const messagesRef = useRef(null);
   const bottomRef = useRef(null);
 
+  // Stato per il dialogo dei template
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
 
+  // Stati per la gestione dello scroll
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const messagesEndRef = useRef(null);
 
+  // Funzione per scorrere verso il basso della chat
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     setIsAtBottom(true);
     setShowScrollButton(false);
   }, []);
 
+  // Gestore dell'evento di scroll
   const handleScroll = useCallback((e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     const isBottom = scrollHeight - scrollTop === clientHeight;
@@ -62,12 +73,14 @@ export default function ChatComponent() {
     setShowScrollButton(!isBottom);
   }, []);
 
+  // Effetto per il recupero delle chat all'avvio o al cambio del codice Spotty
   useEffect(() => {
     if (codiceSpotty) {
       fetchChats();
     }
   }, [codiceSpotty]);
 
+  // Effetto per il recupero dei messaggi quando viene selezionata una chat
   useEffect(() => {
     if (selectedChat && codiceSpotty) {
       setMessages([]); // Resetta i messaggi quando cambia la chat
@@ -87,6 +100,7 @@ export default function ChatComponent() {
     };
   }, [selectedChat, codiceSpotty]);
 
+  // Effetto per lo scroll automatico quando arrivano nuovi messaggi
   useEffect(() => {
     if (isAtBottom) {
       scrollToBottom();
@@ -139,7 +153,7 @@ export default function ChatComponent() {
     }
   }, [codiceSpotty]);
 
-  // Nuova funzione per aggiornare una singola chat
+  // Funzione per aggiornare una singola chat
   const updateChat = (mobile, lastMessage) => {
     setChats(prevChats => prevChats.map(chat => {
       if (chat.id === mobile) {
@@ -154,7 +168,7 @@ export default function ChatComponent() {
     }));
   };
 
-  // Polling per aggiornare i messaggi
+  // Effetto per il polling dei messaggi
   useEffect(() => {
     let pollingInterval;
 
@@ -253,10 +267,12 @@ export default function ChatComponent() {
       .toUpperCase();
   };
 
+  // Recupera i dati della chat selezionata
   const selectedChatData = Array.isArray(chats)
     ? chats.find((chat) => chat.id === selectedChat)
     : null;
 
+  // Gestore per l'invio di un nuovo messaggio
   const handleMessageSent = (newMessage) => {
     setMessages((prevMessages) => [...prevMessages, newMessage]);
     setChats((prevChats) =>
@@ -275,7 +291,7 @@ export default function ChatComponent() {
     scrollToBottom();
   };
 
-  // Aggiungi questa nuova funzione
+  // Gestore per la selezione di una chat
   const handleChatSelect = (chatId) => {
     setSelectedChat(chatId);
     setChats((prevChats) =>
@@ -287,6 +303,7 @@ export default function ChatComponent() {
 
   // Renderizzazione del componente
   if (!codiceSpotty) {
+    // Renderizza il form di inserimento del codice Spotty se non è presente
     const [spottyNumber, setSpottyNumber] = useState("");
 
     const handleSubmit = (e) => {
@@ -323,6 +340,7 @@ export default function ChatComponent() {
     );
   }
 
+  // Renderizza l'interfaccia principale della chat
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
       {/* Sezione sinistra delle chat */}
@@ -437,6 +455,7 @@ export default function ChatComponent() {
             )}
           </div>
         ) : (
+          // Messaggio di benvenuto quando nessuna chat è selezionata
           <div className="flex flex-col items-center justify-center h-full bg-[#f0f2f5]">
             <div className="w-20 h-20 bg-[#25d366] rounded-full flex items-center justify-center mb-4">
               <MessageCircle className="w-10 h-10 text-white" />

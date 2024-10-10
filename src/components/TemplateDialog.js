@@ -1,7 +1,8 @@
 // components/TemplateDialog.js
 
+// Importazione delle dipendenze necessarie
 import { useState, useEffect } from "react";
-import { format } from "date-fns"; // Aggiungi questa importazione
+import { format } from "date-fns";
 import {
   Dialog,
   DialogTrigger,
@@ -30,7 +31,9 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// Componente principale per il dialogo dei template
 export default function TemplateDialog(props) {
+  // Destrutturazione delle props
   const {
     isTemplateDialogOpen,
     setIsTemplateDialogOpen,
@@ -40,20 +43,23 @@ export default function TemplateDialog(props) {
     scrollToBottom,
   } = props;
 
+  // Stati per gestire i template e le interazioni dell'utente
   const [templatesByLanguage, setTemplatesByLanguage] = useState({});
   const [selectedLanguage, setSelectedLanguage] = useState("it");
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [errorTemplates, setErrorTemplates] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [templateType, setTemplateType] = useState('all'); // Nuovo stato per il filtro
+  const [templateType, setTemplateType] = useState('all'); // Stato per il filtro dei tipi di template
 
+  // Effetto per caricare i template quando il dialogo viene aperto
   useEffect(() => {
     if (isTemplateDialogOpen) {
       fetchTemplates();
     }
   }, [isTemplateDialogOpen]);
 
+  // Funzione per recuperare i template dal server
   const fetchTemplates = async () => {
     if (!codiceSpotty) return;
 
@@ -84,6 +90,7 @@ export default function TemplateDialog(props) {
     }
   };
 
+  // Funzione per gestire la selezione e l'invio di un template
   const handleTemplateSelect = async (template) => {
     if (
       !template ||
@@ -100,6 +107,7 @@ export default function TemplateDialog(props) {
     let body;
     let queryParams;
 
+    // Preparazione dei dati per l'invio del template in base al tipo (media o testo)
     if (template.IsMediaTemplate) {
       endpoint = '/api/send-media-template';
       const formData = new FormData();
@@ -145,6 +153,7 @@ export default function TemplateDialog(props) {
       console.error("Errore nell'invio del template:", error);
     }
 
+    // Chiusura del dialogo e reset degli stati dopo l'invio
     setIsTemplateDialogOpen(false);
     setSelectedTemplate(null);
     scrollToBottom();
@@ -165,25 +174,30 @@ export default function TemplateDialog(props) {
     return mimeTypes[ext] || 'application/octet-stream';
   };
 
+  // Funzione per gestire il cambio di lingua
   const handleLanguageChange = (language) => {
     setSelectedLanguage(language);
     setCurrentPage(1);
     setSelectedTemplate(null);
   };
 
+  // Funzione per cambiare pagina nella lista dei template
   const changePage = (pageNumber) => {
     setCurrentPage(pageNumber);
     setSelectedTemplate(null);
   };
 
+  // Funzione per gestire il click su un template
   const handleTemplateClick = (template) => {
     setSelectedTemplate(template);
   };
 
+  // Funzione per chiudere l'anteprima del template
   const closePreview = () => {
     setSelectedTemplate(null);
   };
 
+  // Funzione per rimuovere i caratteri di escape dal contenuto del messaggio
   const unescapeMessageContent = (content) => {
     if (!content) return "";
     return content
@@ -192,6 +206,7 @@ export default function TemplateDialog(props) {
       .replace(/\\\\/g, "\\");
   };
 
+  // Validazione e preparazione dei template per la visualizzazione
   const validTemplatesByLanguage =
     templatesByLanguage && typeof templatesByLanguage === "object"
       ? templatesByLanguage
@@ -199,7 +214,7 @@ export default function TemplateDialog(props) {
 
   const templates = validTemplatesByLanguage[selectedLanguage] || [];
 
-  // Funzione per filtrare i template
+  // Funzione per filtrare i template in base al tipo selezionato
   const filterTemplates = (templates) => {
     switch(templateType) {
       case 'text':
@@ -213,6 +228,7 @@ export default function TemplateDialog(props) {
 
   const filteredTemplates = filterTemplates(templates);
 
+  // Configurazione della paginazione
   const TEMPLATES_PER_PAGE = 6;
   const totalPages = Math.ceil(filteredTemplates.length / TEMPLATES_PER_PAGE);
   const currentTemplates = filteredTemplates.slice(
@@ -220,6 +236,7 @@ export default function TemplateDialog(props) {
     currentPage * TEMPLATES_PER_PAGE
   );
 
+  // Rendering del componente
   return (
     <Dialog
       open={isTemplateDialogOpen}
@@ -242,7 +259,7 @@ export default function TemplateDialog(props) {
               predefinito.
             </DialogDescription>
           </DialogHeader>
-          {/* Language Selector */}
+          {/* Selettore della lingua */}
           <div className="max-w-xs mx-auto">
             <Select
               value={selectedLanguage}
@@ -265,7 +282,7 @@ export default function TemplateDialog(props) {
             </Select>
           </div>
 
-          {/* Aggiunta del filtro per tipo di template */}
+          {/* Filtro per tipo di template */}
           <div className="max-w-xs mx-auto">
             <Select value={templateType} onValueChange={setTemplateType}>
               <SelectTrigger className="w-full">
@@ -279,7 +296,7 @@ export default function TemplateDialog(props) {
             </Select>
           </div>
 
-          {/* Template List or Preview */}
+          {/* Visualizzazione dell'anteprima del template o della lista dei template */}
           {selectedTemplate ? (
             <div className="relative">
               <Button
@@ -296,7 +313,7 @@ export default function TemplateDialog(props) {
                   className="max-w-full sm:max-w-md md:max-w-lg p-2 rounded-lg bg-[#dcf8c6] text-right"
                   style={{ overflowWrap: "break-word" }}
                 >
-                  {/* Mostra solo i media nell'anteprima */}
+                  {/* Visualizzazione dei media nell'anteprima */}
                   {selectedTemplate.Immagine && (
                     <div className="mb-2">
                       {selectedTemplate.Immagine.endsWith(".pdf") ? (
@@ -363,7 +380,6 @@ export default function TemplateDialog(props) {
                   <CardHeader className="p-0 overflow-hidden">
                     <div className="w-full h-32 bg-muted rounded-t-lg flex items-center justify-center">
                       {template.IsMediaTemplate ? (
-                        // ... (logica per visualizzare l'anteprima del media)
                         <div className="flex flex-col items-center">
                           <ImageIcon className="w-12 h-12 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground">Media</p>
@@ -395,7 +411,7 @@ export default function TemplateDialog(props) {
               Nessun template disponibile per i criteri selezionati.
             </p>
           )}
-          {/* Pagination */}
+          {/* Paginazione */}
           {totalPages > 1 && !selectedTemplate && (
             <div className="flex justify-between items-center mt-4">
               <Button

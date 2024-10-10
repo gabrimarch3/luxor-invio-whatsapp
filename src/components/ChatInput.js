@@ -7,7 +7,9 @@ import TemplateDialog from "./TemplateDialog";
 import { useState, useRef } from "react";
 import Image from 'next/image';
 
+// Componente principale per l'input della chat
 export default function ChatInput(props) {
+  // Destrutturazione delle props
   const {
     messageInput,
     setMessageInput,
@@ -20,22 +22,27 @@ export default function ChatInput(props) {
     scrollToBottom,
   } = props;
 
+  // Stati locali per la gestione dei file
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Gestore del cambiamento del file selezionato
   const handleFileChange = (event) => {
     const file = event.target.files[0];
     if (file) {
       setSelectedFile(file);
+      // Creazione di un'anteprima del file
       const fileReader = new FileReader();
       fileReader.onload = (e) => setPreviewUrl(e.target.result);
       fileReader.readAsDataURL(file);
     }
   };
 
+  // Funzione per inviare un messaggio con media allegato
   const handleSendWithMedia = async () => {
     if (selectedFile) {
+      // Preparazione dei dati per l'upload
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('codice_spotty', codiceSpotty);
@@ -43,6 +50,7 @@ export default function ChatInput(props) {
       formData.append('caption', messageInput);
 
       try {
+        // Richiesta di upload del file
         const response = await fetch('/api/upload-media', {
           method: 'POST',
           body: formData,
@@ -50,8 +58,7 @@ export default function ChatInput(props) {
 
         if (response.ok) {
           const data = await response.json();
-          // Qui non chiamiamo più handleSendMessage separatamente
-          // Invece, aggiorniamo lo stato dei messaggi direttamente
+          // Aggiornamento dello stato dei messaggi
           props.onMessageSent({
             id: data.message_id,
             sender: "Me",
@@ -62,6 +69,7 @@ export default function ChatInput(props) {
             status: null,
             isSystem: false,
           });
+          // Reset degli stati dopo l'invio
           setSelectedFile(null);
           setPreviewUrl(null);
           setMessageInput('');
@@ -72,10 +80,12 @@ export default function ChatInput(props) {
         console.error('Errore nella richiesta di upload:', error);
       }
     } else {
+      // Se non c'è un file, invia un messaggio normale
       handleSendMessage();
     }
   };
 
+  // Funzione per rimuovere il file selezionato
   const clearSelectedFile = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -83,6 +93,7 @@ export default function ChatInput(props) {
 
   return (
     <div className="flex flex-col p-3 bg-[#f0f2f5]">
+      {/* Anteprima del file selezionato */}
       {previewUrl && (
         <div className="relative mb-2">
           <Image
@@ -103,6 +114,7 @@ export default function ChatInput(props) {
         </div>
       )}
       <div className="flex items-center">
+        {/* Componente per la selezione dei template */}
         <TemplateDialog
           isTemplateDialogOpen={isTemplateDialogOpen}
           setIsTemplateDialogOpen={setIsTemplateDialogOpen}
@@ -113,6 +125,7 @@ export default function ChatInput(props) {
         />
 
         <div className="flex-grow mx-2">
+          {/* Input del messaggio o prompt per selezionare un template */}
           {isChatDisabled ? (
             <div
               onClick={() => setIsTemplateDialogOpen(true)}
@@ -135,6 +148,7 @@ export default function ChatInput(props) {
           )}
         </div>
 
+        {/* Pulsante di invio */}
         {isChatDisabled ? (
           <Button variant="ghost" className="text-[#54656f]" disabled>
             <Send className="w-6 h-6" />
@@ -149,6 +163,7 @@ export default function ChatInput(props) {
           </Button>
         )}
 
+        {/* Input nascosto per la selezione del file */}
         <input
           type="file"
           ref={fileInputRef}
@@ -157,6 +172,7 @@ export default function ChatInput(props) {
           accept="image/*,video/*,application/pdf"
         />
 
+        {/* Pulsante per aprire il selettore di file */}
         <Button
           variant="ghost"
           className="text-[#54656f]"

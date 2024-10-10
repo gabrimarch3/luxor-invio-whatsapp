@@ -1,28 +1,34 @@
 // components/MessageList.js
 
-import { format, isToday, isYesterday } from "date-fns";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Check, CheckCheck } from "lucide-react";
+// Importazione delle dipendenze necessarie
+import { format, isToday, isYesterday } from "date-fns"; // Funzioni per la formattazione e il confronto delle date
+import ReactMarkdown from "react-markdown"; // Componente per il rendering del markdown
+import remarkGfm from "remark-gfm"; // Plugin per supportare GitHub Flavored Markdown
+import { Check, CheckCheck } from "lucide-react"; // Icone per lo stato dei messaggi
 
+// Componente principale MessageList
 export default function MessageList(props) {
+  // Destrutturazione delle props
   const {
-    messages,
-    messageSearch,
-    selectedChatData,
+    messages, // Array di messaggi da visualizzare
+    messageSearch, // Stringa di ricerca per filtrare i messaggi
+    selectedChatData, // Dati della chat selezionata (non utilizzato in questo componente)
   } = props;
 
+  // Filtraggio dei messaggi in base alla stringa di ricerca
   const filteredMessages = Array.isArray(messages)
     ? messages.filter((message) =>
         message.content.toLowerCase().includes(messageSearch.toLowerCase())
       )
     : [];
 
+  // Funzione per raggruppare i messaggi per data
   const groupMessagesByDate = (messages) => {
     const groupedMessages = [];
     messages.forEach((message) => {
       const messageDate = new Date(message.time);
       let dateLabel = "";
+      // Determinazione dell'etichetta della data
       if (isToday(messageDate)) {
         dateLabel = "Oggi";
       } else if (isYesterday(messageDate)) {
@@ -31,6 +37,7 @@ export default function MessageList(props) {
         dateLabel = format(messageDate, "dd/MM/yyyy");
       }
 
+      // Aggiunta del messaggio al gruppo corrispondente
       const dateGroup = groupedMessages.find(
         (group) => group.dateLabel === dateLabel
       );
@@ -46,8 +53,10 @@ export default function MessageList(props) {
     return groupedMessages;
   };
 
+  // Applicazione del raggruppamento ai messaggi filtrati
   const groupedMessages = groupMessagesByDate(filteredMessages);
 
+  // Funzione per rimuovere i caratteri di escape dal contenuto del messaggio
   const unescapeMessageContent = (content) => {
     if (!content) return "";
     return content
@@ -56,6 +65,7 @@ export default function MessageList(props) {
       .replace(/\\\\/g, "\\");
   };
 
+  // Funzione per sostituire i placeholder nel contenuto del messaggio
   const replacePlaceholders = (content, replacements) => {
     if (!replacements) return content;
     let updatedContent = content;
@@ -69,6 +79,7 @@ export default function MessageList(props) {
     return updatedContent;
   };
 
+  // Dati utente di esempio per la sostituzione dei placeholder
   const userData = {
     1: "Mirco",
     2: "Ceccarini",
@@ -76,10 +87,12 @@ export default function MessageList(props) {
     4: "Un altro dato",
   };
 
+  // Funzione per determinare se un messaggio è di sistema
   const isSystemMessage = (message) => {
     return message.isSystem;
   };
 
+  // Rendering del componente
   return (
     <div className="p-4">
       {groupedMessages.map((group, index) => (
@@ -90,7 +103,7 @@ export default function MessageList(props) {
               {group.dateLabel}
             </div>
           </div>
-          {/* Messaggi */}
+          {/* Rendering dei messaggi */}
           {group.messages.map((message) => (
             <div
               key={message.id}
@@ -101,12 +114,13 @@ export default function MessageList(props) {
               }`}
             >
               {!isSystemMessage(message) ? (
+                // Rendering di un messaggio normale
                 <div
                   className={`inline-block max-w-[80%] p-2 rounded-lg ${
                     message.sender === "Me" ? "bg-[#dcf8c6]" : "bg-white"
                   }`}
                 >
-                  {/* Rendering media content */}
+                  {/* Rendering del contenuto multimediale */}
                   {message.media_url && message.mime_type && (
                     <div className="mb-2">
                       {message.mime_type.startsWith("image/") && (
@@ -121,11 +135,11 @@ export default function MessageList(props) {
                           )}
                         </>
                       )}
-                      {/* ... (gestione di altri tipi di media) */}
+                      {/* Qui si possono aggiungere gestioni per altri tipi di media */}
                     </div>
                   )}
 
-                  {/* Rendering formatted text */}
+                  {/* Rendering del testo formattato */}
                   {message.content && (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
@@ -138,7 +152,7 @@ export default function MessageList(props) {
                     </ReactMarkdown>
                   )}
 
-                  {/* Indicatore di stato */}
+                  {/* Indicatore di stato del messaggio */}
                   <div className="flex items-center justify-end text-xs text-[#667781] mt-1">
                     {message.sender === "Me" && message.status !== null && (
                       <span className="mr-1">
@@ -155,7 +169,7 @@ export default function MessageList(props) {
                   </div>
                 </div>
               ) : (
-                // Messaggio di sistema
+                // Rendering di un messaggio di sistema
                 <div className="bg-gray-300 text-center py-1 px-3 rounded-full text-sm">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}

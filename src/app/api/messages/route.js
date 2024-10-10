@@ -4,15 +4,18 @@ import { NextResponse } from 'next/server';
 import { getClientDbConfig, connectToClientDb, logKaleyraError } from '../../../utils/db';
 import mysql from 'mysql2/promise';
 
+// Configurazione per Next.js: forza il rendering dinamico e usa il runtime Node.js
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Gestisce le richieste GET per recuperare i messaggi
 export async function GET(request) {
+  // Estrae i parametri dalla query string
   const { searchParams } = new URL(request.url);
   const encryptedCodiceSpotty = searchParams.get('codice_spotty');
   const mobile = searchParams.get('mobile');
 
-  // Verifica che 'codice_spotty' e 'mobile' siano stati forniti
+  // Verifica la presenza dei parametri obbligatori
   if (!encryptedCodiceSpotty) {
     return NextResponse.json({ message: 'Codice Spotty non fornito' }, { status: 400 });
   }
@@ -21,10 +24,9 @@ export async function GET(request) {
     return NextResponse.json({ message: 'Numero di telefono non fornito' }, { status: 400 });
   }
 
-  // Funzione di decriptazione (implementa la tua logica se necessaria)
+  // Funzione di decriptazione (da implementare se necessaria)
   const decryptCodiceSpotty = (encrypted) => {
-    // Implementa la tua logica di decriptazione qui
-    // Se non necessiti di decriptazione, ritorna direttamente il valore
+    // TODO: Implementare la logica di decriptazione
     return encrypted;
   };
 
@@ -34,17 +36,17 @@ export async function GET(request) {
     return NextResponse.json({ message: 'Codice Spotty non valido' }, { status: 400 });
   }
 
-  // Rimuove il prefisso 'spotty' dal codice spotty
+  // Rimuove il prefisso 'spotty' dal codice
   const codiceSpottyWithoutPrefix = codiceSpotty.replace('spotty', '');
 
-  // Ottieni i dettagli di connessione al database del cliente
+  // Recupera la configurazione del database del cliente
   const clientConfig = await getClientDbConfig(codiceSpotty);
 
   if (!clientConfig) {
     return NextResponse.json({ message: 'Configurazione cliente non trovata' }, { status: 400 });
   }
 
-  // Connettiti al database del cliente
+  // Stabilisce la connessione al database del cliente
   const clientConnection = await connectToClientDb(clientConfig);
 
   if (!clientConnection) {
@@ -59,7 +61,7 @@ export async function GET(request) {
     return filteredLines.join('\n');
   };
 
-  // Funzione per ottenere il mime type dall'estensione del file
+  // Funzione per determinare il MIME type basato sull'estensione del file
   const getMimeType = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
     const mimeTypes = {
@@ -69,13 +71,13 @@ export async function GET(request) {
       gif: 'image/gif',
       mp4: 'video/mp4',
       pdf: 'application/pdf',
-      // Aggiungi altri tipi se necessario
+      // Aggiungere altri tipi MIME se necessario
     };
     return mimeTypes[ext] || 'application/octet-stream';
   };
 
   try {
-    // Query per recuperare i messaggi ricevuti (con media)
+    // Recupera i messaggi ricevuti dal database
     const [receivedRows] = await clientConnection.execute(
       `
       SELECT
@@ -93,7 +95,7 @@ export async function GET(request) {
       [mobile]
     );
 
-    // Query per recuperare i messaggi inviati (con media)
+    // Recupera i messaggi inviati dal database
     const [sentRows] = await clientConnection.execute(
       `
       SELECT
@@ -112,17 +114,16 @@ export async function GET(request) {
       [mobile]
     );
 
-    // Combina i messaggi
+    // Combina e ordina tutti i messaggi
     const allMessages = [...receivedRows, ...sentRows];
-
-    // Ordina i messaggi per data
     allMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-    // Mappa i messaggi per adattarli al formato richiesto
+    // Elabora e formatta i messaggi
     const messages = allMessages
       .map(row => {
         let content = '';
 
+        // Gestisce il parsing del contenuto per i messaggi ricevuti
         if (row.direction === 'received') {
           try {
             const messageData = JSON.parse(row.message);
@@ -137,46 +138,48 @@ export async function GET(request) {
           content = row.message || '';
         }
 
-        // Rimuove le linee di data dal contenuto del messaggio
+        // Rimuove le linee di data dal contenuto
         content = removeDateLines(content);
 
-        // Verifica che la data sia valida
+        // Verifica la validità della data del messaggio
         const messageDate = new Date(row.time);
         if (isNaN(messageDate.getTime())) {
           console.error(`Data non valida per il messaggio con id ${row.id}: ${row.time}`);
           return null; // Esclude i messaggi con date non valide
         }
 
-        // Deriva il mime_type dall'estensione del file se media_url è presente
+        // Gestisce l'URL e il MIME type dei media
         let mime_type = null;
         let media_url = row.media_url || null;
 
         if (media_url) {
           mime_type = getMimeType(media_url);
 
-          // Verifica se media_url inizia con 'http://' o 'https://'
+          // Costruisce l'URL completo per i media se necessario
           if (!/^https?:\/\//.test(media_url)) {
-            // Costruisce il media_url secondo il formato richiesto
             const imageName = media_url;
             media_url = `https://media.spottywifi.app/wa/${codiceSpottyWithoutPrefix}/images/${imageName}`;
           }
         }
 
+        // Restituisce l'oggetto messaggio formattato
         return {
           id: row.id,
           sender: row.sender,
           content: content,
           media_url: media_url,
           mime_type: mime_type,
-          time: messageDate.toISOString(), // ISO 8601
+          time: messageDate.toISOString(), // Formato ISO 8601
           status: row.Status || null, // Solo per i messaggi inviati
           isSystem: row.sender === 'System',
         };
       })
       .filter(message => message !== null); // Rimuove i messaggi null
 
+    // Chiude la connessione al database
     await clientConnection.end();
 
+    // Restituisce i messaggi come risposta JSON
     return NextResponse.json(messages);
   } catch (error) {
     console.error('Errore nel recupero dei messaggi:', error.message);
